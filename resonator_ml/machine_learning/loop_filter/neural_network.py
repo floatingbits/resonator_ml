@@ -15,7 +15,7 @@ from dataclasses import dataclass
 import numpy as np
 
 class NeuralNetworkModule(nn.Module):
-    def __init__(self, window_size=7, control_dim=0, hidden=64):
+    def __init__(self, window_size=7, control_dim=0, hidden=64, activation:nn.Module=nn.Tanh()):
         super().__init__()
 
         self.in_dim = window_size + control_dim
@@ -114,7 +114,7 @@ class ControlInputProvider(abc.ABC):
 
 class DummyControlInputProvider(ControlInputProvider):
     def get_control_input_data(self) -> np.ndarray:
-        return np.array([1])
+        return np.array([0])
 
 
 
@@ -154,25 +154,30 @@ class NeuralNetworkResonatorFactory:
         match network_type:
             case "v1" | "v09":
                 return NeuralNetworkModule(len(delay.delays),len(controls.get_control_input_data()))
+            case "v2":
+                return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()), activation=nn.SiLU())
+            case "v1_1":
+                return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()), hidden=256)
 
     def create_neural_network_delay(self, network_type: str):
         match network_type:
-            case "v1":
-                return NnResonatorDelay(44100, PatternDelayFactory([DelayPattern(0,0,3), DelayPattern(1,3,3)]))
+
             case "v09":
                 return NnResonatorDelay(44100, PatternDelayFactory([DelayPattern(0, 0, 2), DelayPattern(1, 3, 2)]))
+            case _:
+                return NnResonatorDelay(44100, PatternDelayFactory([DelayPattern(0, 0, 3), DelayPattern(1, 3, 3)]))
 
 
     def create_neural_network_controls(self, network_type: str):
         match network_type:
-            case "v1" | "v09":
+            case _:
                 return DummyControlInputProvider()
 
 
-def train_neural_network(model, dataloader, epochs=20, lr=1e-4, device="cpu", epoch_callback: Callable[[int, int, float], None]=None):
+def train_neural_network(model, dataloader, epochs=20, lr=1e-4, device="cpu",
+                         epoch_callback: Callable[[int, int, float], None]=None, loss_fn=nn.MSELoss()):
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    loss_fn = nn.MSELoss()
 
     for epoch in range(epochs):
         epoch_loss = 0.0

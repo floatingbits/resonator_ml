@@ -3,17 +3,21 @@ import time
 from resonator_ml.machine_learning.file_management import create_loop_filter_model_file_name
 from resonator_ml.machine_learning.loop_filter.neural_network import prepare_dataloader, NeuralNetworkModule, \
     train_neural_network, NeuralNetworkResonatorFactory
-from resonator_ml.machine_learning.loop_filter.training_data import TrainingDataGenerator
+from resonator_ml.machine_learning.loop_filter.training_data import TrainingDataGenerator, TrainingParameterFactory
 
 
 def print_callback(epoch: int, epochs: int, epoch_loss: float):
     print(f"Epoch {epoch + 1}/{epochs}  Loss: {epoch_loss:.10f}")
 
 if __name__ == "__main__":
-    instrument = "Strat"
+    instrument = "KS"
     resonator_type_name = "v1"
-    model_suffix = ""
+    model_suffix = "_2"
     #model_suffix = "_test_v09"
+
+    training_parameter_factory = TrainingParameterFactory()
+    training_parameters = training_parameter_factory.create_parameters("v2.1")
+
 
     start = time.time()
     resonator_factory = NeuralNetworkResonatorFactory()
@@ -21,7 +25,7 @@ if __name__ == "__main__":
     training_data_generator = TrainingDataGenerator()
     dataset = training_data_generator.generate_training_dataset(network_type=resonator_type_name, instrument=instrument)
 
-    dataloader = prepare_dataloader(dataset, batch_size=20000)
+    dataloader = prepare_dataloader(dataset, batch_size=training_parameters.batch_size)
 
 
     model_name = instrument + "_" + resonator_type_name + model_suffix
@@ -30,7 +34,9 @@ if __name__ == "__main__":
     model = resonator.model
 
     # Trainieren
-    model = train_neural_network(model, dataloader, epochs=200, epoch_callback=print_callback)
+    model = train_neural_network(model, dataloader, lr=training_parameters.learning_rate,
+                                 loss_fn=training_parameters.loss_function,epochs=training_parameters.epochs,
+                                 epoch_callback=print_callback)
 
     # Speichern
     torch.save(model.state_dict(), create_loop_filter_model_file_name(model_name))

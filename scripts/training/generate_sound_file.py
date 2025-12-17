@@ -7,15 +7,14 @@ import time
 
 
 from resonator_ml.machine_learning.file_management import create_loop_filter_model_file_name
-from resonator_ml.machine_learning.loop_filter.neural_network import prepare_dataloader, NeuralNetworkModule, \
-    train_neural_network, NeuralNetworkResonatorFactory
-from resonator_ml.machine_learning.loop_filter.training_data import TrainingDataGenerator, FilepathGenerator
+from resonator_ml.machine_learning.loop_filter.neural_network import NeuralNetworkResonatorFactory
+from resonator_ml.machine_learning.loop_filter.training_data import  FilepathGenerator
 
 if __name__ == "__main__":
-    instrument = "Strat"
+    instrument = "KS"
     resonator_type_name = "v1"
     model_suffix = ""
-    #model_suffix = "_test_v09"
+    model_suffix = "_2"
     model_name = instrument + "_" + resonator_type_name  + model_suffix
 
 
@@ -47,7 +46,7 @@ if __name__ == "__main__":
     delay.prepare()
     delay.process_mono_split(init_samples)  # output can be ignored
 
-    dummy_input = np.zeros(10 * 44100, dtype=np.float32)
+    dummy_input = np.zeros(20 * 44100, dtype=np.float32)
     out = resonator.process_mono(dummy_input)
 
     filepath_generator.base_path = 'data/results'

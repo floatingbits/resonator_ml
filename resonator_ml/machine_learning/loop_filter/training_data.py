@@ -1,7 +1,10 @@
+from typing import Callable
+
 import numpy as np
 import soundfile as sf
 import torch
 from dataclasses import dataclass
+from resonator_ml.machine_learning.custom_loss_functions import relative_l1, log_magnitude_mse
 
 from resonator_ml.audio.util import frame_batch_generator
 from resonator_ml.machine_learning.loop_filter.neural_network import NeuralNetworkResonatorFactory, NeuralNetworkDataset
@@ -24,14 +27,27 @@ class TrainingParameters:
     batch_size: int
     epochs: int
     learning_rate: float
+    loss_function: Callable
 
-class TrainingDataFactory:
+class TrainingParameterFactory:
     def create_parameters(self, version: str):
         match version:
             case "v1.1":
-                return TrainingParameters(batch_size=2000, epochs=2000, learning_rate= 1e-4)
+                return TrainingParameters(batch_size=2000, epochs=2000, learning_rate= 1e-4, loss_function=torch.nn.MSELoss())
+            case "v1.2":
+                return TrainingParameters(batch_size=32, epochs=200, learning_rate=1e-4,
+                                          loss_function=torch.nn.MSELoss())
+            case "v2":
+                return TrainingParameters(batch_size=20000, epochs=100, learning_rate=1e-4,
+                                          loss_function=relative_l1)
+            case "v2.1":
+                return TrainingParameters(batch_size=32, epochs=200, learning_rate=1e-4,
+                                          loss_function=relative_l1)
+            case "v2.2":
+                return TrainingParameters(batch_size=32, epochs=200, learning_rate=1e-4,
+                                          loss_function=log_magnitude_mse)
             case _:
-                return TrainingParameters(batch_size=20000, epochs=200, learning_rate=1e-4)
+                return TrainingParameters(batch_size=20000, epochs=200, learning_rate=1e-4, loss_function=torch.nn.MSELoss())
 
 class TrainingDataGenerator:
     def generate_training_dataset(self, network_type:str, instrument:str):
@@ -68,9 +84,18 @@ class TrainingDataGenerator:
         for frame in frame_batch_generator(remaining_signal, 1):
             delay_output = delay.process_mono_split(frame)
             delay_row = delay_output.T # Transpose because trainingdata expects rows instead of columns
+
             inputs_concatenated = np.concatenate([delay_row, controls_row], axis=1)
             target_list.append(frame)
             input_list.append(inputs_concatenated)
+
+            # force symmetric behaviour by adding symmetric training sample
+            negative_delay_row = delay_row * -1
+            negative_frame = frame * -1
+            negative_inputs_concatenated = np.concatenate([negative_delay_row, controls_row], axis=1)
+            target_list.append(negative_frame)
+            input_list.append(negative_inputs_concatenated)
+
             count += 1
             if count > max_frames:
                 break
