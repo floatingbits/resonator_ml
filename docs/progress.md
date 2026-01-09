@@ -118,8 +118,9 @@ some thoughts came to my mind that didn't have to do too much with training data
 generalize. At first, I had a very good approximation of a vibrating string in mind: Karplus-Strong - Delay, Decay, Filter.
 This is a generalisation, that the system could have learned to solve the task with very little effort. But it didn't
 and instead, in my eyes, performed much worse. 
-Why? I guess multiple reasons:
-- I didn't really tell it, what mattered to me most (statistically correct decay) and taught it to be sample correct 
+
+Why? I guess for multiple reasons:
+- I didn't really tell it, what mattered to me most (statistically correct decay), and taught it to be sample correct 
 instead
 - It might be a case of overfitting: While I want it to generalize and learn a smooth filter and decay in the first place,
 the network tries to learn every detailed behavior at every dynamic stage, which it might even be capable of, considering
