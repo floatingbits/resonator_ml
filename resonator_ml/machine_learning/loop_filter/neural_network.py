@@ -47,6 +47,11 @@ class NeuralNetworkDataset(Dataset):
     def __getitem__(self, idx):
         return self.inputs[idx], self.targets[idx]
 
+    def add(self, dataset: 'NeuralNetworkDataset'):
+        self.inputs = torch.vstack([self.inputs, dataset.inputs])
+        self.targets = torch.vstack([self.targets, dataset.targets])
+
+
 @dataclass
 class DelayPattern:
     t_factor: float

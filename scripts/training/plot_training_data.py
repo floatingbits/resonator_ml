@@ -4,7 +4,7 @@ from resonator_ml.machine_learning.view.audio import BatchFeatureViewer
 import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
-    instrument = "KS"
+    instrument = "KS_E"
     resonator_type_name = "v1"
     model_suffix = "_9"
     # model_suffix = "_test_v09"

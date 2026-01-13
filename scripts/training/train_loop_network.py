@@ -10,9 +10,9 @@ def print_callback(epoch: int, epochs: int, epoch_loss: float):
     print(f"Epoch {epoch + 1}/{epochs}  Loss: {epoch_loss:.10f}")
 
 if __name__ == "__main__":
-    instrument = "KS"
+    instrument = "Strat_E"
     resonator_type_name = "v1"
-    model_suffix = "_2"
+    model_suffix = "_4"
     #model_suffix = "_test_v09"
 
     training_parameter_factory = TrainingParameterFactory()

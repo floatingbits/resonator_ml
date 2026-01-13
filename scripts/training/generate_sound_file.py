@@ -8,13 +8,13 @@ import time
 
 from resonator_ml.machine_learning.file_management import create_loop_filter_model_file_name
 from resonator_ml.machine_learning.loop_filter.neural_network import NeuralNetworkResonatorFactory
-from resonator_ml.machine_learning.loop_filter.training_data import  FilepathGenerator
+from resonator_ml.machine_learning.loop_filter.training_data import FilepathGenerator, TrainingFileDescriptor, TrainingFileFinder
 
 if __name__ == "__main__":
-    instrument = "KS"
+    instrument = "Strat_E"
     resonator_type_name = "v1"
     model_suffix = ""
-    model_suffix = "_2"
+    model_suffix = "_4"
     model_name = instrument + "_" + resonator_type_name  + model_suffix
 
 
@@ -29,10 +29,14 @@ if __name__ == "__main__":
     model.eval()
 
     delay = resonator.delay
-    delay.set_base_frequency(83.05)
+    delay.set_base_frequency(82.46)
 
-    filepath_generator = FilepathGenerator(instrument=instrument)
-    filepath = filepath_generator.generate_file_path('E', '0', 'plectrum')
+    file_descriptor = TrainingFileDescriptor(model_name=instrument, parameter_string="0")
+    file_finder = TrainingFileFinder()
+    filepaths = file_finder.get_filepaths(file_descriptor)
+
+
+    filepath = filepaths[0]
 
     # WAV-Datei laden
     signal, samplerate = sf.read(filepath, dtype='float32')
@@ -49,9 +53,10 @@ if __name__ == "__main__":
     dummy_input = np.zeros(20 * 44100, dtype=np.float32)
     out = resonator.process_mono(dummy_input)
 
+    filepath_generator = FilepathGenerator(instrument=instrument)
     filepath_generator.base_path = 'data/results'
     filepath_generator.mode = 'decay_only/workspace'
-    filepath = filepath_generator.generate_file_path('E', '0', 'plectrum')
+    filepath = filepath_generator.generate_file_path( '0', 'plectrum')
 
     sf.write(filepath, out, samplerate)
 

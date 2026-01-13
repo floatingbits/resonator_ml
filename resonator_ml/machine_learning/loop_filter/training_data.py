@@ -3,11 +3,32 @@ from typing import Callable
 import numpy as np
 import soundfile as sf
 import torch
+import glob
+
 from dataclasses import dataclass
 from resonator_ml.machine_learning.custom_loss_functions import relative_l1, log_magnitude_mse
 
 from resonator_ml.audio.util import frame_batch_generator
 from resonator_ml.machine_learning.loop_filter.neural_network import NeuralNetworkResonatorFactory, NeuralNetworkDataset
+from resonator_ml.utility.random import ReproRNG
+
+TRAINING_DATA_BASE_PATH = "data/processed"
+TRAINING_DATA_SUB_PATH_DECAY = "decay_only"
+
+@dataclass
+class TrainingFileDescriptor:
+    model_name: str
+    parameter_string: str
+    file_name: str = "*.wav"
+
+class TrainingFileFinder:
+    def get_filepaths(self, file_descriptor: TrainingFileDescriptor) -> list[str]:
+        file_pattern =  ('{base_path}/{mode}/{model_name}/{parameter_string}/{file_name}').format(
+            base_path=TRAINING_DATA_BASE_PATH, mode=TRAINING_DATA_SUB_PATH_DECAY,
+            model_name=file_descriptor.model_name, parameter_string=file_descriptor.parameter_string,
+            file_name=file_descriptor.file_name)
+        return glob.glob(file_pattern)
+
 
 
 class FilepathGenerator:
@@ -17,9 +38,9 @@ class FilepathGenerator:
         self.mode = mode
         self.extension = extension
 
-    def generate_file_path(self, string_name:str, fret_no:str, exciter_type:str):
-        return ('{base_path}/{mode}/{instrument}_{string_name}_{fret_no}_{exciter_type}.{extension}'
-                .format(base_path=self.base_path,mode=self.mode,instrument=self.instrument,string_name=string_name,
+    def generate_file_path(self, fret_no:str, exciter_type:str):
+        return ('{base_path}/{mode}/{instrument}_{fret_no}_{exciter_type}.{extension}'
+                .format(base_path=self.base_path,mode=self.mode,instrument=self.instrument,
                         fret_no=fret_no, exciter_type=exciter_type, extension=self.extension))
 
 @dataclass
@@ -46,14 +67,33 @@ class TrainingParameterFactory:
             case "v2.2":
                 return TrainingParameters(batch_size=32, epochs=200, learning_rate=1e-4,
                                           loss_function=log_magnitude_mse)
+            case "v2.3":
+                return TrainingParameters(batch_size=32, epochs=100, learning_rate=1e-4,
+                                          loss_function=relative_l1)
             case _:
                 return TrainingParameters(batch_size=20000, epochs=200, learning_rate=1e-4, loss_function=torch.nn.MSELoss())
 
 class TrainingDataGenerator:
     def generate_training_dataset(self, network_type:str, instrument:str):
-        filepath_generator = FilepathGenerator(instrument=instrument)
-        filepath = filepath_generator.generate_file_path('E', '0', 'plectrum')
+        file_descriptor = TrainingFileDescriptor(model_name=instrument, parameter_string='0')
+        file_finder = TrainingFileFinder()
+        file_paths = file_finder.get_filepaths(file_descriptor)
 
+        accumulated_training_data = None
+        for file_path in file_paths:
+            training_data = self.generate_training_dataset_from_filepath(network_type=network_type, filepath=file_path)
+            if not accumulated_training_data:
+                accumulated_training_data = training_data
+            else:
+                accumulated_training_data.add(training_data)
+
+        return accumulated_training_data
+
+
+
+        return self.generate_training_dataset_from_filepath(network_type, filepath)
+
+    def generate_training_dataset_from_filepath(self, network_type:str, filepath: str):
         # WAV-Datei laden
         signal, samplerate = sf.read(filepath, dtype='float32')
         if signal.ndim == 2:
@@ -70,20 +110,28 @@ class TrainingDataGenerator:
         max_delay_samples = 550
         init_samples = signal[:max_delay_samples]
         delay.prepare()
-        delay.process_mono_split(init_samples) # output can be ignored
+        delay.process_mono_split(init_samples)  # output can be ignored
         remaining_signal = signal[max_delay_samples:]
 
         input_list = []
         target_list = []
         # iterate per sample over rest of audio file:
         # Feed the delay with the signal, the delay's output is the input of the neural network + control signal
-        max_frames = 200000
+        max_frames = 80000
         count = 0
         controls_input = controls.get_control_input_data()
         controls_row = controls_input.reshape(1, -1)
+
+        # reproducible random number generator to get reproducible results while randomly reducing training data
+        rng = ReproRNG(100)
         for frame in frame_batch_generator(remaining_signal, 1):
+
             delay_output = delay.process_mono_split(frame)
-            delay_row = delay_output.T # Transpose because trainingdata expects rows instead of columns
+            if rng.bernoulli(0.93):
+                # Reduce Training data so that we can also use the tail of the file without slowing down training too much
+                continue
+
+            delay_row = delay_output.T  # Transpose because trainingdata expects rows instead of columns
 
             inputs_concatenated = np.concatenate([delay_row, controls_row], axis=1)
             target_list.append(frame)
