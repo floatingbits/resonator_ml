@@ -2,8 +2,7 @@ import soundfile as sf
 import time
 import numpy as np
 
-from app.container import nn_resonator
-from resonator_ml.machine_learning.loop_filter.neural_network import Trainer
+
 def print_callback(epoch: int, epochs: int, epoch_loss: float):
     print(f"Epoch {epoch + 1}/{epochs}  Loss: {epoch_loss:.10f}")
 
@@ -18,7 +17,7 @@ class GenerateSoundFile:
 
         start = time.time()
 
-        dummy_input = np.zeros(20 * 44100, dtype=np.float32)
+        dummy_input = np.zeros(20 * self.samplerate, dtype=np.float32)
         out = self.resonator.process_mono(dummy_input)
 
         sf.write(self.out_filepath, out, self.samplerate)
