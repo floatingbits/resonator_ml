@@ -1,19 +1,22 @@
-from typing import Callable
-
 import numpy as np
 import soundfile as sf
 import torch
 import glob
 
 from dataclasses import dataclass
-from resonator_ml.machine_learning.custom_loss_functions import relative_l1, log_magnitude_mse
+
+from torch.utils.data import DataLoader, Dataset
 
 from resonator_ml.audio.util import frame_batch_generator
-from resonator_ml.machine_learning.loop_filter.neural_network import NeuralNetworkResonatorFactory, NeuralNetworkDataset
+from resonator_ml.machine_learning.training import TrainingParameters
 from resonator_ml.utility.random import ReproRNG
 
 TRAINING_DATA_BASE_PATH = "data/processed"
 TRAINING_DATA_SUB_PATH_DECAY = "decay_only"
+
+
+def prepare_dataloader(dataset, batch_size=512):
+    return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 @dataclass
 class TrainingFileDescriptor:
@@ -43,45 +46,22 @@ class FilepathGenerator:
                 .format(base_path=self.base_path,mode=self.mode,instrument=self.instrument,
                         fret_no=fret_no, exciter_type=exciter_type, extension=self.extension))
 
-@dataclass
-class TrainingParameters:
-    batch_size: int
-    epochs: int
-    learning_rate: float
-    loss_function: Callable
-
-class TrainingParameterFactory:
-    def create_parameters(self, version: str):
-        match version:
-            case "v1.1":
-                return TrainingParameters(batch_size=2000, epochs=2000, learning_rate= 1e-4, loss_function=torch.nn.MSELoss())
-            case "v1.2":
-                return TrainingParameters(batch_size=32, epochs=200, learning_rate=1e-4,
-                                          loss_function=torch.nn.MSELoss())
-            case "v2":
-                return TrainingParameters(batch_size=20000, epochs=100, learning_rate=1e-4,
-                                          loss_function=relative_l1)
-            case "v2.1":
-                return TrainingParameters(batch_size=32, epochs=200, learning_rate=1e-4,
-                                          loss_function=relative_l1)
-            case "v2.2":
-                return TrainingParameters(batch_size=32, epochs=200, learning_rate=1e-4,
-                                          loss_function=log_magnitude_mse)
-            case "v2.3":
-                return TrainingParameters(batch_size=32, epochs=100, learning_rate=1e-4,
-                                          loss_function=relative_l1)
-            case _:
-                return TrainingParameters(batch_size=20000, epochs=200, learning_rate=1e-4, loss_function=torch.nn.MSELoss())
 
 class TrainingDataGenerator:
-    def generate_training_dataset(self, network_type:str, instrument:str):
-        file_descriptor = TrainingFileDescriptor(model_name=instrument, parameter_string='0')
+    def __init__(self, training_parameters: TrainingParameters, training_file_descriptor: TrainingFileDescriptor, delay, controls):
+        self.training_parameters = training_parameters
+        self.training_file_descriptor = training_file_descriptor
+        self.delay = delay
+        self.controls = controls
+
+    def generate_training_dataset(self):
+
         file_finder = TrainingFileFinder()
-        file_paths = file_finder.get_filepaths(file_descriptor)
+        file_paths = file_finder.get_filepaths(self.training_file_descriptor)
 
         accumulated_training_data = None
         for file_path in file_paths:
-            training_data = self.generate_training_dataset_from_filepath(network_type=network_type, filepath=file_path)
+            training_data = self.generate_training_dataset_from_filepath(filepath=file_path)
             if not accumulated_training_data:
                 accumulated_training_data = training_data
             else:
@@ -89,28 +69,25 @@ class TrainingDataGenerator:
 
         return accumulated_training_data
 
+    def generate_training_dataloader(self):
+        dataset = self.generate_training_dataset()
+        return prepare_dataloader(dataset, batch_size=self.training_parameters.batch_size)
 
 
-        return self.generate_training_dataset_from_filepath(network_type, filepath)
-
-    def generate_training_dataset_from_filepath(self, network_type:str, filepath: str):
+    def generate_training_dataset_from_filepath(self,  filepath: str):
         # WAV-Datei laden
         signal, samplerate = sf.read(filepath, dtype='float32')
         if signal.ndim == 2:
             signal = signal[:, 0]
 
-        # let's get the same delay we would use in the resonator loop
-        resonator_factory = NeuralNetworkResonatorFactory()
-        delay = resonator_factory.create_neural_network_delay(network_type)
-        controls = resonator_factory.create_neural_network_controls(network_type)
-        delay.set_base_frequency(83.05)
+
 
         # for initialization, we need to feed at least so many samples into the multi-tap delay that the longest
         # of delays is completely full and outputs the first sample
         max_delay_samples = 550
         init_samples = signal[:max_delay_samples]
-        delay.prepare()
-        delay.process_mono_split(init_samples)  # output can be ignored
+        self.delay.prepare()
+        self.delay.process_mono_split(init_samples)  # output can be ignored
         remaining_signal = signal[max_delay_samples:]
 
         input_list = []
@@ -119,14 +96,14 @@ class TrainingDataGenerator:
         # Feed the delay with the signal, the delay's output is the input of the neural network + control signal
         max_frames = 80000
         count = 0
-        controls_input = controls.get_control_input_data()
+        controls_input = self.controls.get_control_input_data()
         controls_row = controls_input.reshape(1, -1)
 
         # reproducible random number generator to get reproducible results while randomly reducing training data
         rng = ReproRNG(100)
         for frame in frame_batch_generator(remaining_signal, 1):
 
-            delay_output = delay.process_mono_split(frame)
+            delay_output = self.delay.process_mono_split(frame)
             if rng.bernoulli(0.93):
                 # Reduce Training data so that we can also use the tail of the file without slowing down training too much
                 continue
@@ -151,3 +128,23 @@ class TrainingDataGenerator:
         targets = torch.tensor(np.vstack(target_list), dtype=torch.float32)  # Shape: (N, 1)
         inputs = torch.tensor(np.vstack(input_list), dtype=torch.float32)
         return NeuralNetworkDataset(inputs, targets)
+
+
+class NeuralNetworkDataset(Dataset):
+    def __init__(self, inputs, targets):
+        """
+        windows: Tensor [N, n_inputs]
+        targets: Tensor [N, 1]
+        """
+        self.inputs = inputs
+        self.targets = targets
+
+    def __len__(self):
+        return len(self.inputs)
+
+    def __getitem__(self, idx):
+        return self.inputs[idx], self.targets[idx]
+
+    def add(self, dataset: 'NeuralNetworkDataset'):
+        self.inputs = torch.vstack([self.inputs, dataset.inputs])
+        self.targets = torch.vstack([self.targets, dataset.targets])

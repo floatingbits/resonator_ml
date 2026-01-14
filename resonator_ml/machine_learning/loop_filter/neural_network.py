@@ -1,18 +1,20 @@
 import abc
 from abc import abstractmethod
 from typing import Callable
-
+import soundfile as sf
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
 
 from resonator_ml.audio.core import MonoProcessor, MonoSplitProcessor, Tunable, MonoFrame, MultiChannelFrame, \
-    MonoPullProcessor, MonoPushProcessor, MultiChannelPullProcessor
+    MonoPushProcessor, MultiChannelPullProcessor
 from resonator_ml.audio.delay_lines import SampleAccurateDelayLineMono
 
 from dataclasses import dataclass
 
 import numpy as np
+
+from resonator_ml.machine_learning.training import TrainingParameters
+
 
 class NeuralNetworkModule(nn.Module):
     def __init__(self, window_size=7, control_dim=0, hidden=64, activation:nn.Module=nn.Tanh()):
@@ -30,26 +32,6 @@ class NeuralNetworkModule(nn.Module):
 
     def forward(self, inputs):
         return self.net(inputs)
-
-
-class NeuralNetworkDataset(Dataset):
-    def __init__(self, inputs, targets):
-        """
-        windows: Tensor [N, n_inputs]
-        targets: Tensor [N, 1]
-        """
-        self.inputs = inputs
-        self.targets = targets
-
-    def __len__(self):
-        return len(self.inputs)
-
-    def __getitem__(self, idx):
-        return self.inputs[idx], self.targets[idx]
-
-    def add(self, dataset: 'NeuralNetworkDataset'):
-        self.inputs = torch.vstack([self.inputs, dataset.inputs])
-        self.targets = torch.vstack([self.targets, dataset.targets])
 
 
 @dataclass
@@ -142,6 +124,21 @@ class NeuralNetworkResonator(MonoProcessor):
             self.delay.push_mono(np.array([out[i]])) # push a single sample
         return out
 
+class NNResonatorInitializer:
+    def initialize(self, resonator: NeuralNetworkResonator, filepath):
+
+        # WAV-Datei laden
+        signal, samplerate = sf.read(filepath, dtype='float32')
+        if signal.ndim == 2:
+            signal = signal[:, 0]
+
+        # for initialization, we need to feed at least so many samples into the multi-tap delay that the longest
+        # of delays is completely full and outputs the first sample
+        max_delay_samples = 550
+        init_samples = signal[:max_delay_samples]
+        resonator.delay.prepare()
+        resonator.delay.process_mono_split(init_samples)  # output can be ignored
+
 
 class NeuralNetworkResonatorFactory:
     def create_neural_network_resonator(self, network_type:str, sample_rate:int):
@@ -179,37 +176,38 @@ class NeuralNetworkResonatorFactory:
                 return DummyControlInputProvider()
 
 
-def train_neural_network(model, dataloader, epochs=20, lr=1e-4, device="cpu",
-                         epoch_callback: Callable[[int, int, float], None]=None, loss_fn=nn.MSELoss()):
-    model = model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+class Trainer:
+    def __init__(self, training_parameters: TrainingParameters):
+        self.training_parameters = training_parameters
 
-    for epoch in range(epochs):
-        epoch_loss = 0.0
+    def train_neural_network(self, model, dataloader, device="cpu",
+                             epoch_callback: Callable[[int, int, float], None]=None):
+        model = model.to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=self.training_parameters.learning_rate)
 
-        for x_input, y_target in dataloader:
-            x_input = x_input.to(device)
-            y_target = y_target.to(device)
+        for epoch in range(self.training_parameters.epochs):
+            epoch_loss = 0.0
 
-            # Vorwärts
-            y_pred = model(x_input)
+            for x_input, y_target in dataloader:
+                x_input = x_input.to(device)
+                y_target = y_target.to(device)
 
-            # Loss im Sample-Bereich
-            loss = loss_fn(y_pred, y_target)
+                # Vorwärts
+                y_pred = model(x_input)
 
-            # Rückwärts
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+                # Loss im Sample-Bereich
+                loss = self.training_parameters.loss_function(y_pred, y_target)
 
-            epoch_loss += loss.item() * len(x_input)
+                # Rückwärts
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
-        if epoch_callback:
-            epoch_callback(epoch, epochs, epoch_loss / len(dataloader.dataset))
+                epoch_loss += loss.item() * len(x_input)
 
-    return model
+            if epoch_callback:
+                epoch_callback(epoch, self.training_parameters.epochs, epoch_loss / len(dataloader.dataset))
 
+        return model
 
-def prepare_dataloader(dataset, batch_size=512):
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
