@@ -42,14 +42,14 @@ if __name__ == "__main__":
 
     tone = karplus_strong(
         frequency=82.46,  # Low E string as in Strat File
-        duration=20.0,
+        duration=3.0,
         sample_rate=sample_rate,
-        decay=0.995
+        decay=0.98
     )
 
     # Schreiben mit soundfile
     sf.write(
-        file="data/raw/KS_E_0_plectrum_1.wav",
+        file="data/raw/KS_Short_E_0_plectrum_3.wav",
         data=tone,
         samplerate=sample_rate,
         subtype="FLOAT"
