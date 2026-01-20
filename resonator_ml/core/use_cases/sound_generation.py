@@ -2,15 +2,17 @@ import soundfile as sf
 import time
 import numpy as np
 
+from resonator_ml.ports.file_storage import FileStorage
+
 
 def print_callback(epoch: int, epochs: int, epoch_loss: float):
     print(f"Epoch {epoch + 1}/{epochs}  Loss: {epoch_loss:.10f}")
 
 
 class GenerateSoundFile:
-    def __init__(self, resonator,  out_filepath: str, samplerate: int):
+    def __init__(self, resonator,  file_storage: FileStorage, samplerate: int):
         self.resonator = resonator
-        self.out_filepath = out_filepath
+        self.file_storage = file_storage
         self.samplerate = samplerate
 
     def execute(self):
@@ -19,8 +21,9 @@ class GenerateSoundFile:
 
         dummy_input = np.zeros(20 * self.samplerate, dtype=np.float32)
         out = self.resonator.process_mono(dummy_input)
-
-        sf.write(self.out_filepath, out, self.samplerate)
+        out_path = self.file_storage.sound_output_path()
+        out_path.parent.mkdir(parents=True,exist_ok=True)
+        sf.write(out_path, out, self.samplerate)
 
         end = time.time()
         length = end - start

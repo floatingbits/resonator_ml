@@ -21,14 +21,13 @@ class NeuralNetworkModule(nn.Module):
         super().__init__()
 
         self.in_dim = window_size + control_dim
-
         self.net = nn.Sequential(
             nn.Linear(self.in_dim, hidden),
             nn.Tanh(),
-            nn.Linear(hidden, hidden),
-            nn.Tanh(),
             nn.Linear(hidden, 1)
         )
+        # TODO this is only used as a storage for logging parameters. Define properly in config!
+        self.hidden = hidden
 
     def forward(self, inputs):
         return self.net(inputs)
@@ -142,7 +141,7 @@ class NNResonatorInitializer:
 
 class NeuralNetworkResonatorFactory:
     def create_neural_network_resonator(self, network_type:str, sample_rate:int):
-        delay = self.create_neural_network_delay(network_type)
+        delay = self.create_neural_network_delay(network_type, sample_rate)
         controls = self.create_neural_network_controls(network_type)
 
         return NeuralNetworkResonator(
@@ -154,20 +153,27 @@ class NeuralNetworkResonatorFactory:
 
     def create_neural_network_module(self, network_type: str, delay, controls):
         match network_type:
-            case "v1" | "v09":
-                return NeuralNetworkModule(len(delay.delays),len(controls.get_control_input_data()))
             case "v2":
                 return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()), activation=nn.SiLU())
             case "v1_1":
                 return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()), hidden=256)
+            case "v3_1":
+                return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()), hidden=10)
+            case "v3_2":
+                return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()), hidden=256)
+            case _:
+                return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()))
 
-    def create_neural_network_delay(self, network_type: str):
+    def create_neural_network_delay(self, network_type: str, sample_rate: int):
         match network_type:
 
             case "v09":
-                return NnResonatorDelay(44100, PatternDelayFactory([DelayPattern(0, 0, 2), DelayPattern(1, 3, 2)]))
+                return NnResonatorDelay(sample_rate, PatternDelayFactory([DelayPattern(0, 0, 2), DelayPattern(1, 3, 2)]))
+            case "v3"|"v3_1"|"v3_2":
+                return NnResonatorDelay(sample_rate, PatternDelayFactory([DelayPattern(0, 0, 2), DelayPattern(1, 3, 2),
+                                                                    DelayPattern(0.25, 2, 2), ]))
             case _:
-                return NnResonatorDelay(44100, PatternDelayFactory([DelayPattern(0, 0, 3), DelayPattern(1, 3, 3)]))
+                return NnResonatorDelay(sample_rate, PatternDelayFactory([DelayPattern(0, 0, 3), DelayPattern(1, 3, 3)]))
 
 
     def create_neural_network_controls(self, network_type: str):

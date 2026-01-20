@@ -120,20 +120,28 @@ class SampleAccurateDelayLineMono(MonoProcessor, MonoPushProcessor, MonoPullProc
         for i, sample in enumerate(mono):
             out[i] = self.buffer[self.read_index]
             self.buffer[self.write_index] = sample
-            self.write_index = (self.write_index + 1) % len(self.buffer)
-            self.read_index = (self.read_index + 1) % len(self.buffer)
+            self.write_index = self.write_index + 1
+            self.read_index = self.read_index + 1
+            if self.write_index == self.n_delay_samples:
+                self.write_index = 0
+            if self.read_index == self.n_delay_samples:
+                self.read_index = 0
         return out
 
     def push_mono(self, mono):
         for i, sample in enumerate(mono):
             self.buffer[self.write_index] = sample
-            self.write_index = (self.write_index + 1) % len(self.buffer)
+            self.write_index = self.write_index + 1
+            if self.write_index == self.n_delay_samples:
+                self.write_index = 0
 
 
     def pull_mono(self, buffer_size: int) -> MonoFrame:
         out = np.zeros(buffer_size, dtype=np.float32)
         for i in range(buffer_size):
             out[i] = self.buffer[self.read_index]
-            self.read_index = (self.read_index + 1) % len(self.buffer)
+            self.read_index = self.read_index + 1
+            if self.read_index == self.n_delay_samples:
+                self.read_index = 0
         return out
 

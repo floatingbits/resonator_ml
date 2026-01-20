@@ -2,6 +2,7 @@ import numpy as np
 import soundfile as sf
 import torch
 import glob
+from pathlib import Path
 
 from dataclasses import dataclass
 
@@ -46,22 +47,81 @@ class FilepathGenerator:
                 .format(base_path=self.base_path,mode=self.mode,instrument=self.instrument,
                         fret_no=fret_no, exciter_type=exciter_type, extension=self.extension))
 
+class NeuralNetworkDataset(Dataset):
+    def __init__(self, inputs, targets):
+        """
+        windows: Tensor [N, n_inputs]
+        targets: Tensor [N, 1]
+        """
+        self.inputs = inputs
+        self.targets = targets
+
+    def __len__(self):
+        return len(self.inputs)
+
+    def __getitem__(self, idx):
+        return self.inputs[idx], self.targets[idx]
+
+    def add(self, dataset: 'NeuralNetworkDataset'):
+        self.inputs = torch.vstack([self.inputs, dataset.inputs])
+        self.targets = torch.vstack([self.targets, dataset.targets])
+
+class TrainingDatasetCache:
+    def __init__(self, path: str):
+        self.path = path
+
+    def save_dataset(self, dataset: NeuralNetworkDataset):
+        cache_path = Path(self.path)
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(
+            {
+                "inputs": dataset.inputs,
+                "targets": dataset.targets,
+            },
+            self.path
+        )
+
+    def load_dataset(self) -> NeuralNetworkDataset|None:
+        cache_path = Path(self.path)
+        if not cache_path.exists():
+            return None
+        data = torch.load(self.path, map_location="cpu")
+        return NeuralNetworkDataset(
+            inputs=data["inputs"],
+            targets=data["targets"],
+        )
+
+
+
+
 
 class TrainingDataGenerator:
-    def __init__(self, training_parameters: TrainingParameters, training_file_descriptor: TrainingFileDescriptor, delay, controls):
+    def __init__(self, training_parameters: TrainingParameters, training_file_descriptor: TrainingFileDescriptor, delay, controls, training_dataset_cache: TrainingDatasetCache):
         self.training_parameters = training_parameters
         self.training_file_descriptor = training_file_descriptor
         self.delay = delay
         self.controls = controls
+        self.training_dataset_cache = training_dataset_cache
 
+    def get_or_create_dataset(self) -> NeuralNetworkDataset:
+        dataset = self.training_dataset_cache.load_dataset()
+        if dataset:
+            print("Loading dataset from cache")
+            return dataset
+
+        print("Generating dataset")
+        dataset = self.generate_training_dataset()  # teuer
+        self.training_dataset_cache.save_dataset(dataset)
+        return dataset
     def generate_training_dataset(self):
+
 
         file_finder = TrainingFileFinder()
         file_paths = file_finder.get_filepaths(self.training_file_descriptor)
-
+        max_frames = int (self.training_parameters.max_training_data_frames / len(file_paths))
         accumulated_training_data = None
         for file_path in file_paths:
-            training_data = self.generate_training_dataset_from_filepath(filepath=file_path)
+            training_data = self.generate_training_dataset_from_filepath(filepath=file_path, max_frames=max_frames)
             if not accumulated_training_data:
                 accumulated_training_data = training_data
             else:
@@ -70,11 +130,12 @@ class TrainingDataGenerator:
         return accumulated_training_data
 
     def generate_training_dataloader(self):
-        dataset = self.generate_training_dataset()
+
+        dataset = self.get_or_create_dataset()
         return prepare_dataloader(dataset, batch_size=self.training_parameters.batch_size)
 
 
-    def generate_training_dataset_from_filepath(self,  filepath: str):
+    def generate_training_dataset_from_filepath(self,  filepath: str, max_frames):
         # WAV-Datei laden
         signal, samplerate = sf.read(filepath, dtype='float32')
         if signal.ndim == 2:
@@ -94,17 +155,17 @@ class TrainingDataGenerator:
         target_list = []
         # iterate per sample over rest of audio file:
         # Feed the delay with the signal, the delay's output is the input of the neural network + control signal
-        max_frames = 80000
         count = 0
         controls_input = self.controls.get_control_input_data()
         controls_row = controls_input.reshape(1, -1)
 
+        skip_probability = 1 - min(1, max_frames/len(remaining_signal))
         # reproducible random number generator to get reproducible results while randomly reducing training data
         rng = ReproRNG(100)
         for frame in frame_batch_generator(remaining_signal, 1):
 
             delay_output = self.delay.process_mono_split(frame)
-            if rng.bernoulli(0.93):
+            if skip_probability and rng.bernoulli(skip_probability):
                 # Reduce Training data so that we can also use the tail of the file without slowing down training too much
                 continue
 
@@ -130,21 +191,4 @@ class TrainingDataGenerator:
         return NeuralNetworkDataset(inputs, targets)
 
 
-class NeuralNetworkDataset(Dataset):
-    def __init__(self, inputs, targets):
-        """
-        windows: Tensor [N, n_inputs]
-        targets: Tensor [N, 1]
-        """
-        self.inputs = inputs
-        self.targets = targets
 
-    def __len__(self):
-        return len(self.inputs)
-
-    def __getitem__(self, idx):
-        return self.inputs[idx], self.targets[idx]
-
-    def add(self, dataset: 'NeuralNetworkDataset'):
-        self.inputs = torch.vstack([self.inputs, dataset.inputs])
-        self.targets = torch.vstack([self.targets, dataset.targets])

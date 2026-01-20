@@ -20,6 +20,32 @@ def relative_l1(pred, target, eps=1e-4):
     denom = target.abs() + eps
     return ( (pred - target).abs() / denom ).mean()
 
+def relative_l1_with_penalty(pred, target):
+    return magnitude_penalty_loss(pred, target, relative_l1, alpha=3)
+
+def magnitude_penalty_loss(y_pred, y_true, base_loss_fn, alpha=1.0, eps=1e-4):
+    """
+    y_pred, y_true: Tensor gleicher Form
+    base_loss_fn: z.B. torch.nn.functional.mse_loss (reduction='none')
+    alpha: Gewicht der Zusatzstrafe
+    """
+
+    # Basis-Loss (z.B. MSE pro Element)
+    base_loss = base_loss_fn(y_pred, y_true)
+
+    # Betrag vergleichen
+    abs_pred = torch.abs(y_pred)
+    abs_true = torch.abs(y_true)
+
+    # Überschreitung
+    excess = torch.relu(abs_pred - abs_true)
+    # excess = max(0, |pred| - |true|)
+    denom = y_true.abs() + eps
+
+    penalty = alpha * excess / denom
+
+    # Gesamt-Loss
+    return (base_loss + penalty).mean()
 
 # ----------------------------
 # 3) Log-amplitude MSE (dB-ähnlich)

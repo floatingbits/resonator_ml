@@ -1,28 +1,50 @@
 import torch
 import time
-from resonator_ml.machine_learning.loop_filter.neural_network import Trainer
+
+from app.config.app import Config
+from resonator_ml.machine_learning.loop_filter.neural_network import Trainer, NeuralNetworkModule
+from resonator_ml.machine_learning.loop_filter.training_data import TrainingDataGenerator
+from resonator_ml.ports.file_storage import FileStorage, DictStorage
+import torch.nn as nn
+
 def print_callback(epoch: int, epochs: int, epoch_loss: float):
     print(f"Epoch {epoch + 1}/{epochs}  Loss: {epoch_loss:.10f}")
 
 
 class TrainLoopNetwork:
-    def __init__(self, model, training_data_generator, model_file_name, trainer: Trainer):
+    # TODO model is only concrete NeuralNetworkModule bc of param logging. Clean up parameter logging, then make model
+    # back nn.Module
+    def __init__(self, model: NeuralNetworkModule, training_data_generator: TrainingDataGenerator, file_storage: FileStorage, trainer: Trainer, params_storage: DictStorage, app_config: Config):
         self.model = model
         self.training_data_generator = training_data_generator
-        self.model_file_name = model_file_name
+        self.file_storage = file_storage
         self.trainer = trainer
+        self.params_storage = params_storage
+        self.app_config = app_config
 
     def execute(self):
 
         start = time.time()
 
         dataloader = self.training_data_generator.generate_training_dataloader()
-
-
+        dataloader_time = time.time()
+        print("Dataloader time ", dataloader_time - start, "seconds!")
         model = self.trainer.train_neural_network(self.model, dataloader, epoch_callback=print_callback)
 
-        # Speichern
-        torch.save(model.state_dict(), self.model_file_name)
+        params = {
+            'instrument': self.app_config.instrument_name,
+            'training_parameters_version': self.app_config.training_parameters_version,
+            'model_version': self.app_config.resonator_version,
+            'batch_size': self.training_data_generator.training_parameters.batch_size,
+            'max_num_frames': self.training_data_generator.training_parameters.max_training_data_frames,
+            'num_layers': len(self.model.net),
+            'num_hidden': self.model.hidden
+        }
+        self.params_storage.save_dict(params)
+        # Save
+        # TODO once logging is cleaned up, this is the right spot to make the new version
+        # self.file_storage.make_new_version_output_dir() # Training the network means new version
+        torch.save(model.state_dict(), self.file_storage.model_file_path())
 
         print("Training abgeschlossen.")
         end = time.time()
