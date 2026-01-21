@@ -10,16 +10,17 @@ def print_callback(epoch: int, epochs: int, epoch_loss: float):
 
 
 class GenerateSoundFile:
-    def __init__(self, resonator,  file_storage: FileStorage, samplerate: int):
+    def __init__(self, resonator,  file_storage: FileStorage, samplerate: int, file_length: float):
         self.resonator = resonator
         self.file_storage = file_storage
         self.samplerate = samplerate
+        self.file_length = file_length
 
     def execute(self):
 
         start = time.time()
 
-        dummy_input = np.zeros(20 * self.samplerate, dtype=np.float32)
+        dummy_input = np.zeros(int(self.file_length * self.samplerate), dtype=np.float32)
         out = self.resonator.process_mono(dummy_input)
         out_path = self.file_storage.sound_output_path()
         out_path.parent.mkdir(parents=True,exist_ok=True)

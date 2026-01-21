@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Generator, Any
 import json
 from resonator_ml.ports.file_storage import FileStorage, DictStorage
-
+from hashlib import sha256
 
 class LocalFileSystemStorage(FileStorage):
     def __init__(self, config: Config):
@@ -71,10 +71,18 @@ class LocalFileSystemStorage(FileStorage):
 
     def training_data_cache_path(self) -> Path:
         path = Path('.')
+        # TODO: Cache key somewhere else
+        serialized_patters = ""
+        for pattern in self.config.neural_network_parameters.delay_patterns:
+            serialized_patters = "+" + serialized_patters + str(pattern.n_before) + "_" + str(pattern.n_after) + "_" + str(pattern.t_factor)+ "-"
+        cache_key_object = [
+            self.config.training_parameters.max_training_data_frames,
+            serialized_patters,
+            self.config.instrument_name
+        ]
         path = (path / self.config.cache_path / self.config.loop_filer_training_data_cache_sub_path /
-                '{instrument}_{model_version}_{training_params_version}.tdata'.format(
-                    instrument=self.config.instrument_name, model_version=self.config.resonator_version,
-                    training_params_version=self.config.training_parameters_version))
+                '{instrument}_{hash}.tdata'.format(
+                    instrument=self.config.instrument_name, hash=sha256(json.dumps(cache_key_object, sort_keys=True).encode("utf-8")).hexdigest()))
         return path
 
     def training_file_paths(self, parameter_string: str) -> Generator[Path, None, None]:

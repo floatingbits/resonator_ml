@@ -29,7 +29,7 @@ def build_generate_sound_file_use_case():
     config = app_config()
     print(app_config())
     print(training_parameters())
-    return GenerateSoundFile(resonator, file_storage=file_storage(), samplerate=config.sample_rate)
+    return GenerateSoundFile(resonator, file_storage=file_storage(), samplerate=config.sample_rate, file_length=config.output_soundfile_length)
 
 def build_plot_training_result_use_case():
 

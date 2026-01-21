@@ -20,14 +20,13 @@ def training_loss_series_provider():
 
 def training_parameters():
     config = app_config()
-    training_parameter_factory = TrainingParameterFactory()
-    return training_parameter_factory.create_parameters(config.training_parameters_version)
+    return config.training_parameters
 
 
 def nn_resonator(load_model_weights: bool, initialize_resonator: bool):
     config = app_config()
     resonator_factory = NeuralNetworkResonatorFactory()
-    resonator =  resonator_factory.create_neural_network_resonator(config.resonator_version, config.sample_rate)
+    resonator =  resonator_factory.create_neural_network_resonator(config.sample_rate, config.neural_network_parameters)
     # let's get the same delay we would use in the resonator loop
     resonator.delay.set_base_frequency(config.base_frequency)
 

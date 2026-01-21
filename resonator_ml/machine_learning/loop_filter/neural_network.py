@@ -17,15 +17,19 @@ from resonator_ml.machine_learning.training import TrainingParameters
 
 
 class NeuralNetworkModule(nn.Module):
-    def __init__(self, window_size=7, control_dim=0, hidden=64, activation:nn.Module=nn.Tanh()):
+    def __init__(self, window_size=7, control_dim=0, hidden=64, n_hidden_layers:int = 1, activation:nn.Module=nn.Tanh()):
         super().__init__()
 
         self.in_dim = window_size + control_dim
         self.net = nn.Sequential(
             nn.Linear(self.in_dim, hidden),
-            nn.Tanh(),
-            nn.Linear(hidden, 1)
         )
+        for n in range(n_hidden_layers):
+            self.net.append(activation)
+            if n < n_hidden_layers - 1:
+                self.net.append(nn.Linear(hidden, hidden))
+
+        self.net.append(nn.Linear(hidden, 1))
         # TODO this is only used as a storage for logging parameters. Define properly in config!
         self.hidden = hidden
 
@@ -138,48 +142,33 @@ class NNResonatorInitializer:
         resonator.delay.prepare()
         resonator.delay.process_mono_split(init_samples)  # output can be ignored
 
+@dataclass
+class NeuralNetworkParameters:
+    num_hidden_per_layer: int
+    num_hidden_layers: int
+    delay_patterns: list[DelayPattern]
+    activation: nn.Module = nn.Tanh()
+
 
 class NeuralNetworkResonatorFactory:
-    def create_neural_network_resonator(self, network_type:str, sample_rate:int):
-        delay = self.create_neural_network_delay(network_type, sample_rate)
-        controls = self.create_neural_network_controls(network_type)
-
+    def create_neural_network_resonator(self, sample_rate:int, parameters: NeuralNetworkParameters):
+        delay = self.create_neural_network_delay(sample_rate, parameters)
+        controls = self.create_neural_network_controls(parameters)
         return NeuralNetworkResonator(
-            self.create_neural_network_module(network_type, delay, controls),
+            self.create_neural_network_module(delay, controls, parameters=parameters),
             delay,
             controls,
             sample_rate
         )
 
-    def create_neural_network_module(self, network_type: str, delay, controls):
-        match network_type:
-            case "v2":
-                return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()), activation=nn.SiLU())
-            case "v1_1":
-                return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()), hidden=256)
-            case "v3_1":
-                return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()), hidden=10)
-            case "v3_2":
-                return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()), hidden=256)
-            case _:
-                return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()))
+    def create_neural_network_module(self, delay, controls, parameters: NeuralNetworkParameters):
+        return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()), n_hidden_layers=parameters.num_hidden_layers, activation=parameters.activation, hidden=parameters.num_hidden_per_layer)
 
-    def create_neural_network_delay(self, network_type: str, sample_rate: int):
-        match network_type:
+    def create_neural_network_delay(self, sample_rate: int, parameters: NeuralNetworkParameters):
+        return NnResonatorDelay(sample_rate, PatternDelayFactory(parameters.delay_patterns))
 
-            case "v09":
-                return NnResonatorDelay(sample_rate, PatternDelayFactory([DelayPattern(0, 0, 2), DelayPattern(1, 3, 2)]))
-            case "v3"|"v3_1"|"v3_2":
-                return NnResonatorDelay(sample_rate, PatternDelayFactory([DelayPattern(0, 0, 2), DelayPattern(1, 3, 2),
-                                                                    DelayPattern(0.25, 2, 2), ]))
-            case _:
-                return NnResonatorDelay(sample_rate, PatternDelayFactory([DelayPattern(0, 0, 3), DelayPattern(1, 3, 3)]))
-
-
-    def create_neural_network_controls(self, network_type: str):
-        match network_type:
-            case _:
-                return DummyControlInputProvider()
+    def create_neural_network_controls(self, parameters: NeuralNetworkParameters):
+        return DummyControlInputProvider()
 
 
 class Trainer:
