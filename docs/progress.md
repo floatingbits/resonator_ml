@@ -90,7 +90,7 @@ used to show a better sense for the statistical behavior.
 - Not the expected result at first
 - Omitting nonlinear Hidden Layers, the general decay and LP behavior could be simulated, which was a giant step, 
 regarding the poor first results. But there was a bias aggregating, so I assumed the model needs a protection 
-against bias. Since there was no bias inherent in the model, I started with focusing on the training data. 
+against bias. Since there was no bias inherent in the model, I started focusing on the training data. 
 ### Using symmetric input
 - When forcing every training sample to contain its negative version (in terms of audio inputs), the model soon learned
 to decay around the center line. Only just at the end of the result files, we are able to notice a small DC component. 
@@ -110,7 +110,8 @@ Ideas:
 time
 
 Results: 
-To DO
+Simply integrating these ideas did not have the desired impact yet. We need to look further into the details of the
+training process.
 
 ### Thoughts about generalisation
 When thinking about the training data, and the systems inability to handle small signals without generating biases, 
@@ -138,8 +139,74 @@ clamping to mere numbers and exact samples.
 If that doesn't work, other techniques generally recommended against overfitting can be tried, but we would first need to
 find out about the specific nature of the system's behavior and decide then what makes most sense.
 
+### Thoughts about physical knowledge
+While the idea about statistically correct decay is not yet implemented, because it is quite some big change in the 
+implementation, I integrated another way to force knowledge about the physical system into the artificial one:  
+Do not put more energy into the output than the training data admit. Allowing energy increase can have a fatal effect
+in a fed back system that is supposed to decay: One signal input constellation that actually amplifies the signal can 
+lead to an infinite loop in the output signal. Therefore (illegally) amplifying the signal must be punished harder in 
+the loss function. I concluded to update my loss function to "relative_l1_with_penalty".
+
+We didn't yet think about an important point  and that might heavily disturb both our mental and DeepLearning model
+is that the signal of electric guitar such as the recorded model does not represent exactly the movement of the strings
+and its energy. While it is impossible that the string gains energy during the decay process,
+the signal that comes out of the pickups can in deed! This is possible because the signal that comes out of the guitar's
+pickup depends also on the plane in which the string moves, not only the movement energy. This plane can rotate and cause 
+sort of a tremolo effect.  
+The big problem with using this signal as training data: The network learns that it is ok to amplify the input under 
+certain conditions. But the real reason why this "amplification" is physically legal can barely be deduced by the network, 
+because until now, we simply do not provide it with the data about the string's vibrational plane. A solution might be to
+introduce another (or multiple) input variable(s): "Current energy", "Current visible energy" or, less physical, 
+"current decay (relative to the average decay)" and "accumulated relative decay"
+From this information, the system can deduct: 
+- "Ok, this output sample must be (or this TRAINING sample IS ) higher, because we currently decay a bit slower than usual." 
+- But also "Ok, we have decayed slower than average for quite some time now, lets start decaying faster, so we meet the 
+physical requirements/do not get stuck"
 
 
+### First successful reproduction of KS Signals
+While the reproduction of the real world Strat guitar has not had a satisfactory outcome yet, I was able to reproduce
+a correct (judged by ear so far) signal of the synthetic Karplus-Strong generated decay behavior.
 
+See sound examples
+[output1](./../data/results/resonator/documentation/first_success_with_KS/output_1.wav)
+[output2](./../data/results/resonator/documentation/first_success_with_KS/output_2.wav)
+[output3](./../data/results/resonator/documentation/first_success_with_KS/output_3.wav)
+
+and comapre them with
+[training1](./../data/processed/decay_only/KS_Short_E/0/1.wav)
+[training2](./../data/processed/decay_only/KS_Short_E/0/2.wav)
+[training3](./../data/processed/decay_only/KS_Short_E/0/3.wav)
+
+Note that not the whole file necessarily has been part of the training and apart from initialization with the first 
+samples of the training file, the output has been generated completely via running the fed back system. 
+
+### Preliminary Conclusions
+While we were able to reproduce the simple synthetic resonator, we are still quite far away from reproducing a 
+complex real world system. Many ideas have been implemented, yet in that domain, we still suffer from some main symptoms:
+- The output decays very fast, settling on a non-zero value (especially fast decay with a high penalty on higher energy output)
+- The output will not come to rest and ring forever (with a lower penalty on higher energy output)
+- Loss numbers seem to stagnate
+
+While there are still some ideas unimplemented (calculate loss only after a few generations of feedback +
+deriving "(invisible) energy"/"(accumulated) decay" features), I have the feeling that before further going down that 
+road and - albeit rational - trying out a bit blindly, I should organize configuration and documentation/monitoring 
+of the process in a more comfortable way. Trying out new parameter combinations and documenting them had become very 
+uncomfortable and my overview over which parameters caused which behaviour and how much potential is in the model as is, 
+without any further introduction of features, physical knowledge and the likes, was suffering. So, for the time being, 
+it was time to reconsider the current architecture and lay the bedrock for a system that can be analyzed and configured 
+more easily and efficiently. 
+
+## Refactorings
+### Result folders and parameter documentation
+
+### Flexible configuration
+
+### Training performance
+
+### System architecture
+
+### Monitoring tools
+### Boosting DL training knowledge
 
 
