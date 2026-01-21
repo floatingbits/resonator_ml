@@ -1,0 +1,8 @@
+{
+  "instrument": "KS_Short_E",
+  "batch_size": 32,
+  "lr": 8e-06,
+  "max_num_frames": 20000,
+  "num_layers": 3,
+  "num_hidden": 20
+}
