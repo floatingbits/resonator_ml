@@ -33,9 +33,8 @@ class TrainLoopNetwork:
 
         params = {
             'instrument': self.app_config.instrument_name,
-            'training_parameters_version': self.app_config.training_parameters_version,
-            'model_version': self.app_config.resonator_version,
             'batch_size': self.training_data_generator.training_parameters.batch_size,
+            'lr': self.training_data_generator.training_parameters.learning_rate,
             'max_num_frames': self.training_data_generator.training_parameters.max_training_data_frames,
             'num_layers': len(self.model.net),
             'num_hidden': self.model.hidden
