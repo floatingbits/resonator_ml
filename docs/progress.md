@@ -276,6 +276,7 @@ or steadily getting better on average, even though it's oscillating quite a bit.
 
 Setting up a quick EpochLossViewer with Matplotlib offered me a quite good overview over convergence, oscillations and
 the according training parameters.
+![Epoch vs Loss example](./img/epoch_loss.png)
 
 ### Effects of the refactoring: Ability to explore the parameter space and boost my DL training knowledge
 
