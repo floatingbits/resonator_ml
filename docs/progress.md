@@ -199,14 +199,89 @@ more easily and efficiently.
 
 ## Refactorings
 ### Result folders and parameter documentation
+#### First approach and its flaws
+
+I started with a kind of "versioning" approach, meaning that a parameter set was assigned a version string and the 
+mapping of version string to actual parameters was made in the actual source code. That way I had hoped to clearly 
+document the evolution of my training and model parameters. But I learned that my process at this point of my deep 
+learning journey is way too much trial and error that I did not want every parameter change to get a new version string
+or get lost under a "dev" version umbrella. Also, deciding which parameter set should get a new version string is a
+process that costs mental resources that can be used better for finding the technical flaws of the model, skillful feature
+extraction and the best training approach and parameters.
+
+Also, a better documentation method of the resulting files must be found. The first idea, putting results into subfolders
+representing the versions, wasn't practical for two reasons: I wanted to get away from the version strings anyway and navigation
+into the subfolders was getting time-consuming.
+
+And, last but not least: Model files and resulting audio files were not in the same folder. That was due to trying to 
+follow a standard python machine learning project structure: Models get their own folder in the project root. Since this 
+project is not a standard machine/deep learning project, but a documentation of my progress, I decided to emphasize 
+traceability and put every file of each run into the same folder. 
+
+#### New result folder system
+To not accidently overwrite any result rendering, I decided to automatically add a "run" folder on each model training, 
+in a git-ignored subfolder. Once I consider a result relevant enough for documentation, I copy it to a version controlled
+folder.
+
+#### Parameter and training success documentation
+I replaced the parameter documentation based on version-string subfolder by logfiles written to the output folder. 
+Rudimentary Documentation of the training progress via simple epoch/loss was added. At the moment, the logging system is 
+still a bit awkward, since it only consists of redirected prints, but I considered it a pragmatic approach for the time 
+being to be able to make progress without investing too much time into a spotlessly clean architecture that slows development
+down before a real success is made or MVP is reached.
+ 
+
 
 ### Flexible configuration
 
-### Training performance
+Getting away from the version strings, I introduced a config file which just represents the current configuration. 
+It is not very sophisticated at this point: One file under version control (constantly modified). But at least, we do not 
+have the burden of deciding which parameter set deserves a new version. 
 
-### System architecture
+### Training performance and caching
+
+I noticed that not only the training of the network took some serious time, but also the generation of the training data, 
+which seems to be due to a very slow delay line implementation (even though it's an integer-length delay without interpolation).
+For the time being, I introduced a training data cache and with a cache hit, I seriously save time per training. (~120 seconds per run, 
+depending on the length of the training files).
+For the actual run of the model in "production" context (also for a training target that represents multiple generations
+of loop feedback) I will need to drastically reduce the delay line's CPU consumption, which I guess has something to 
+do with an inefficiency of np.zeroes_like at small buffer sizes. But further investigation needs to be made and accurate
+tracing/profiling tools be used to really know what is the problem. 
+
+
+### Project architecture
+
+I noticed that the scripts had grown somewhat wildly which is not in line with my ethics as a senior developer, but 
+**more importantly** were beginning to slow me down, because I lost overview and control as well as usability. So I decided
+that before beginning the changes I mentioned above, I needed to clean up the whole structure:
+
+- Central configuration
+- Clear separation of concerns regarding domain logic and composition/adaptation
+- Introduction of a composition root
+
+Even if the resulting architecture is not perfect at the moment, I noticed a clear boost in my performance as a developer,
+engineer and problem solver. Information is not scattered along the project, I mainly edit app.py. (not cool in a shared 
+production project, I know, but for the time being, it works: I have one file to work with.) Dependencies are built in 
+container.py.
 
 ### Monitoring tools
-### Boosting DL training knowledge
 
+I am a visual person. Comparing numbers and their orders of magnitude, their statistics is nothing I can do just staring 
+at the numbers themselves. I need tools to visualize them. 
+
+At the moment, a visualization of the training loss course seemed to be the most logic, because I noticed that I could not 
+remember exactly which parameters resulted in which behaviour and I can't decide if a loss jumps around without getting 
+or steadily getting better on average, even though it's oscillating quite a bit. 
+
+Setting up a quick EpochLossViewer with Matplotlib offered me a quite good overview over convergence, oscillations and
+the according training parameters.
+
+### Effects of the refactoring: Ability to explore the parameter space and boost my DL training knowledge
+
+Armed with that freshly found flexibility in configuration, documentation and visualization, I was able to dive much deeper
+into the theory of DeepLearning, see connections between parameters themselves and parameters and training behaviour. 
+Most importantly I can now ask further questions concerning the whole theory of DL training without having the feeling 
+that it is too abstract, because I cannot try it out immediately or because my project has got so many other unfinished 
+businesses that I cannot focus on looking deeper into the meaning and effects of training parameters.
 
