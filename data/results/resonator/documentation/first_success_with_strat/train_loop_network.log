@@ -1,0 +1,129 @@
+[2026-01-23 23:14:50] Config(results_path='data/results', resonator_results_sub_path='resonator/workspace', resonator_training_path='data/processed/decay_only', cache_path='data/cache', loop_filer_training_data_cache_sub_path='loop_filter_training_data', instrument_name='Strat_E', training_parameters_version='v2.4', sample_rate=44100, base_frequency=82.46, output_soundfile_length=5, training_parameters=TrainingParameters(batch_size=128, epochs=500, learning_rate=2.5e-05, loss_function=<function relative_l1_with_penalty at 0x73b0329fefc0>, max_training_data_frames=400000), neural_network_parameters=NeuralNetworkParameters(num_hidden_per_layer=100, num_hidden_layers=1, delay_patterns=[DelayPattern(t_factor=1, n_before=3, n_after=2), DelayPattern(t_factor=0.25, n_before=2, n_after=2), DelayPattern(t_factor=0.75, n_before=2, n_after=2), DelayPattern(t_factor=0.5, n_before=2, n_after=2)], activation=Tanh()))
+[2026-01-23 23:14:50] TrainingParameters(batch_size=128, epochs=500, learning_rate=2.5e-05, loss_function=<function relative_l1_with_penalty at 0x73b0329fefc0>, max_training_data_frames=400000)
+[2026-01-23 23:14:50] NeuralNetworkModule(
+[2026-01-23 23:14:50]   (net): Sequential(
+[2026-01-23 23:14:50]     (0): Linear(in_features=22, out_features=100, bias=True)
+[2026-01-23 23:14:50]     (1): Tanh()
+[2026-01-23 23:14:50]     (2): Linear(in_features=100, out_features=1, bias=True)
+[2026-01-23 23:14:50]   )
+[2026-01-23 23:14:50] )
+[2026-01-23 23:14:50] Loading dataset from cache
+[2026-01-23 23:14:50] Dataloader time  0.029959917068481445 seconds!
+[2026-01-23 23:15:02] Epoch 1/500  Loss: 0.2010374717 Min_Batch_Loss: 0.0417768247 Max_Batch_Loss: 4.0805444717
+[2026-01-23 23:15:12] Epoch 2/500  Loss: 0.0771488228 Min_Batch_Loss: 0.0349461958 Max_Batch_Loss: 0.2479761541
+[2026-01-23 23:15:20] Epoch 3/500  Loss: 0.0740164305 Min_Batch_Loss: 0.0268865172 Max_Batch_Loss: 0.2574605346
+[2026-01-23 23:15:30] Epoch 4/500  Loss: 0.0734156057 Min_Batch_Loss: 0.0311608370 Max_Batch_Loss: 0.3095653951
+[2026-01-23 23:15:38] Epoch 5/500  Loss: 0.0731097119 Min_Batch_Loss: 0.0311098360 Max_Batch_Loss: 0.2325416654
+[2026-01-23 23:15:46] Epoch 6/500  Loss: 0.0729732468 Min_Batch_Loss: 0.0292017423 Max_Batch_Loss: 0.2405895144
+[2026-01-23 23:15:54] Epoch 7/500  Loss: 0.0728983230 Min_Batch_Loss: 0.0293945149 Max_Batch_Loss: 0.2450703830
+[2026-01-23 23:16:01] Epoch 8/500  Loss: 0.0727425285 Min_Batch_Loss: 0.0304400399 Max_Batch_Loss: 0.2331557125
+[2026-01-23 23:16:11] Epoch 9/500  Loss: 0.0727002481 Min_Batch_Loss: 0.0307403840 Max_Batch_Loss: 0.2305976748
+[2026-01-23 23:16:19] Epoch 10/500  Loss: 0.0725760329 Min_Batch_Loss: 0.0315937437 Max_Batch_Loss: 0.2754659951
+[2026-01-23 23:16:27] Epoch 11/500  Loss: 0.0725255503 Min_Batch_Loss: 0.0297235735 Max_Batch_Loss: 0.2595541775
+[2026-01-23 23:16:34] Epoch 12/500  Loss: 0.0724195089 Min_Batch_Loss: 0.0316110402 Max_Batch_Loss: 0.2227682322
+[2026-01-23 23:16:42] Epoch 13/500  Loss: 0.0724110689 Min_Batch_Loss: 0.0316001922 Max_Batch_Loss: 0.2200777084
+[2026-01-23 23:16:51] Epoch 14/500  Loss: 0.0723331296 Min_Batch_Loss: 0.0301940069 Max_Batch_Loss: 0.2491665483
+[2026-01-23 23:16:59] Epoch 15/500  Loss: 0.0722659050 Min_Batch_Loss: 0.0311994758 Max_Batch_Loss: 0.2123076171
+[2026-01-23 23:17:07] Epoch 16/500  Loss: 0.0722901045 Min_Batch_Loss: 0.0321901999 Max_Batch_Loss: 0.2338264734
+[2026-01-23 23:17:15] Epoch 17/500  Loss: 0.0721601969 Min_Batch_Loss: 0.0299487859 Max_Batch_Loss: 0.2923619747
+[2026-01-23 23:17:23] Epoch 18/500  Loss: 0.0721443536 Min_Batch_Loss: 0.0286007710 Max_Batch_Loss: 0.2214405537
+[2026-01-23 23:17:31] Epoch 19/500  Loss: 0.0721013310 Min_Batch_Loss: 0.0296169948 Max_Batch_Loss: 0.2775798440
+[2026-01-23 23:17:38] Epoch 20/500  Loss: 0.0720486556 Min_Batch_Loss: 0.0316362940 Max_Batch_Loss: 0.2335082889
+[2026-01-23 23:17:47] Epoch 21/500  Loss: 0.0719959600 Min_Batch_Loss: 0.0302526727 Max_Batch_Loss: 0.2594051361
+[2026-01-23 23:17:56] Epoch 22/500  Loss: 0.0720379899 Min_Batch_Loss: 0.0285033770 Max_Batch_Loss: 0.2509528100
+[2026-01-23 23:18:07] Epoch 23/500  Loss: 0.0719724545 Min_Batch_Loss: 0.0302575659 Max_Batch_Loss: 0.1963660568
+[2026-01-23 23:18:21] Epoch 24/500  Loss: 0.0719126484 Min_Batch_Loss: 0.0320199430 Max_Batch_Loss: 0.3028984070
+[2026-01-23 23:18:35] Epoch 25/500  Loss: 0.0719024296 Min_Batch_Loss: 0.0298779998 Max_Batch_Loss: 0.2785491049
+[2026-01-23 23:18:43] Epoch 26/500  Loss: 0.0718525634 Min_Batch_Loss: 0.0298053697 Max_Batch_Loss: 0.2405903935
+[2026-01-23 23:18:52] Epoch 27/500  Loss: 0.0718411805 Min_Batch_Loss: 0.0307428613 Max_Batch_Loss: 0.2145916075
+[2026-01-23 23:19:00] Epoch 28/500  Loss: 0.0717581500 Min_Batch_Loss: 0.0303355828 Max_Batch_Loss: 0.2629826963
+[2026-01-23 23:19:08] Epoch 29/500  Loss: 0.0717341882 Min_Batch_Loss: 0.0276514664 Max_Batch_Loss: 0.2460997850
+[2026-01-23 23:19:16] Epoch 30/500  Loss: 0.0717916873 Min_Batch_Loss: 0.0300454497 Max_Batch_Loss: 0.2391558588
+[2026-01-23 23:19:24] Epoch 31/500  Loss: 0.0717657634 Min_Batch_Loss: 0.0308866501 Max_Batch_Loss: 0.2324173599
+[2026-01-23 23:19:32] Epoch 32/500  Loss: 0.0716500953 Min_Batch_Loss: 0.0310335085 Max_Batch_Loss: 0.3153508604
+[2026-01-23 23:19:39] Epoch 33/500  Loss: 0.0716698455 Min_Batch_Loss: 0.0314260051 Max_Batch_Loss: 0.2350327075
+[2026-01-23 23:19:48] Epoch 34/500  Loss: 0.0716345625 Min_Batch_Loss: 0.0289263073 Max_Batch_Loss: 0.2452209741
+[2026-01-23 23:19:55] Epoch 35/500  Loss: 0.0716114584 Min_Batch_Loss: 0.0301463846 Max_Batch_Loss: 0.2446188331
+[2026-01-23 23:20:03] Epoch 36/500  Loss: 0.0716028063 Min_Batch_Loss: 0.0308131687 Max_Batch_Loss: 0.2611121833
+[2026-01-23 23:20:11] Epoch 37/500  Loss: 0.0715556979 Min_Batch_Loss: 0.0301339682 Max_Batch_Loss: 0.2119253874
+[2026-01-23 23:20:20] Epoch 38/500  Loss: 0.0715259693 Min_Batch_Loss: 0.0302881002 Max_Batch_Loss: 0.2340243608
+[2026-01-23 23:20:28] Epoch 39/500  Loss: 0.0714893274 Min_Batch_Loss: 0.0295940116 Max_Batch_Loss: 0.2265478522
+[2026-01-23 23:20:36] Epoch 40/500  Loss: 0.0714525835 Min_Batch_Loss: 0.0300992019 Max_Batch_Loss: 0.2885821164
+[2026-01-23 23:20:44] Epoch 41/500  Loss: 0.0714742033 Min_Batch_Loss: 0.0286433324 Max_Batch_Loss: 0.2270030379
+[2026-01-23 23:20:52] Epoch 42/500  Loss: 0.0713700983 Min_Batch_Loss: 0.0262027960 Max_Batch_Loss: 0.2104900330
+[2026-01-23 23:21:02] Epoch 43/500  Loss: 0.0713630441 Min_Batch_Loss: 0.0312770382 Max_Batch_Loss: 0.2524229288
+[2026-01-23 23:21:10] Epoch 44/500  Loss: 0.0713751163 Min_Batch_Loss: 0.0294814110 Max_Batch_Loss: 0.2357172519
+[2026-01-23 23:21:18] Epoch 45/500  Loss: 0.0713272228 Min_Batch_Loss: 0.0290593337 Max_Batch_Loss: 0.2202180624
+[2026-01-23 23:21:26] Epoch 46/500  Loss: 0.0712606601 Min_Batch_Loss: 0.0295236204 Max_Batch_Loss: 0.2815220058
+[2026-01-23 23:21:34] Epoch 47/500  Loss: 0.0712666592 Min_Batch_Loss: 0.0286352094 Max_Batch_Loss: 0.2130832672
+[2026-01-23 23:21:42] Epoch 48/500  Loss: 0.0712199833 Min_Batch_Loss: 0.0308225751 Max_Batch_Loss: 0.2157867700
+[2026-01-23 23:21:49] Epoch 49/500  Loss: 0.0712551527 Min_Batch_Loss: 0.0308755171 Max_Batch_Loss: 0.2270027995
+[2026-01-23 23:21:57] Epoch 50/500  Loss: 0.0711884193 Min_Batch_Loss: 0.0317446627 Max_Batch_Loss: 0.2344847918
+[2026-01-23 23:22:05] Epoch 51/500  Loss: 0.0711212652 Min_Batch_Loss: 0.0289769508 Max_Batch_Loss: 0.3089842200
+[2026-01-23 23:22:13] Epoch 52/500  Loss: 0.0711472150 Min_Batch_Loss: 0.0320766531 Max_Batch_Loss: 0.2419472933
+[2026-01-23 23:22:21] Epoch 53/500  Loss: 0.0711330299 Min_Batch_Loss: 0.0294658653 Max_Batch_Loss: 0.2267252356
+[2026-01-23 23:22:28] Epoch 54/500  Loss: 0.0710542262 Min_Batch_Loss: 0.0299874041 Max_Batch_Loss: 0.2811186910
+[2026-01-23 23:22:35] Epoch 55/500  Loss: 0.0711034337 Min_Batch_Loss: 0.0280435663 Max_Batch_Loss: 0.2252607644
+[2026-01-23 23:22:43] Epoch 56/500  Loss: 0.0710156568 Min_Batch_Loss: 0.0310918279 Max_Batch_Loss: 0.2681379616
+[2026-01-23 23:22:51] Epoch 57/500  Loss: 0.0709990259 Min_Batch_Loss: 0.0295747481 Max_Batch_Loss: 0.2444392741
+[2026-01-23 23:22:58] Epoch 58/500  Loss: 0.0709872630 Min_Batch_Loss: 0.0294565372 Max_Batch_Loss: 0.2574920058
+[2026-01-23 23:23:06] Epoch 59/500  Loss: 0.0709586259 Min_Batch_Loss: 0.0300691389 Max_Batch_Loss: 0.2267526388
+[2026-01-23 23:23:14] Epoch 60/500  Loss: 0.0709683052 Min_Batch_Loss: 0.0297280308 Max_Batch_Loss: 0.2202587873
+[2026-01-23 23:23:25] Epoch 61/500  Loss: 0.0709023530 Min_Batch_Loss: 0.0281434748 Max_Batch_Loss: 0.2120363414
+[2026-01-23 23:23:33] Epoch 62/500  Loss: 0.0709348441 Min_Batch_Loss: 0.0310731269 Max_Batch_Loss: 0.2236275524
+[2026-01-23 23:23:41] Epoch 63/500  Loss: 0.0709436148 Min_Batch_Loss: 0.0299834013 Max_Batch_Loss: 0.2438651323
+[2026-01-23 23:23:49] Epoch 64/500  Loss: 0.0708475362 Min_Batch_Loss: 0.0294197053 Max_Batch_Loss: 0.2249266505
+[2026-01-23 23:23:58] Epoch 65/500  Loss: 0.0708659999 Min_Batch_Loss: 0.0292234700 Max_Batch_Loss: 0.2127627730
+[2026-01-23 23:24:05] Epoch 66/500  Loss: 0.0708945387 Min_Batch_Loss: 0.0277736653 Max_Batch_Loss: 0.2345688045
+[2026-01-23 23:24:18] Epoch 67/500  Loss: 0.0708455390 Min_Batch_Loss: 0.0300700106 Max_Batch_Loss: 0.2433564961
+[2026-01-23 23:24:29] Epoch 68/500  Loss: 0.0708790743 Min_Batch_Loss: 0.0288322195 Max_Batch_Loss: 0.2379868776
+[2026-01-23 23:24:41] Epoch 69/500  Loss: 0.0708574623 Min_Batch_Loss: 0.0295603387 Max_Batch_Loss: 0.2352774888
+[2026-01-23 23:24:51] Epoch 70/500  Loss: 0.0708156835 Min_Batch_Loss: 0.0289579872 Max_Batch_Loss: 0.2425997257
+[2026-01-23 23:24:58] Epoch 71/500  Loss: 0.0707761388 Min_Batch_Loss: 0.0300199278 Max_Batch_Loss: 0.2411615402
+[2026-01-23 23:25:07] Epoch 72/500  Loss: 0.0707924956 Min_Batch_Loss: 0.0275698174 Max_Batch_Loss: 0.2187525928
+[2026-01-23 23:25:15] Epoch 73/500  Loss: 0.0707568682 Min_Batch_Loss: 0.0311430767 Max_Batch_Loss: 0.2196781337
+[2026-01-23 23:25:23] Epoch 74/500  Loss: 0.0707113769 Min_Batch_Loss: 0.0309388023 Max_Batch_Loss: 0.2928527892
+[2026-01-23 23:25:31] Epoch 75/500  Loss: 0.0707281004 Min_Batch_Loss: 0.0289765205 Max_Batch_Loss: 0.2253402770
+[2026-01-23 23:25:39] Epoch 76/500  Loss: 0.0706872986 Min_Batch_Loss: 0.0291977357 Max_Batch_Loss: 0.2367581427
+[2026-01-23 23:25:47] Epoch 77/500  Loss: 0.0706724254 Min_Batch_Loss: 0.0303734578 Max_Batch_Loss: 0.2246569693
+[2026-01-23 23:25:55] Epoch 78/500  Loss: 0.0706575206 Min_Batch_Loss: 0.0293307323 Max_Batch_Loss: 0.2050699294
+[2026-01-23 23:26:03] Epoch 79/500  Loss: 0.0706004354 Min_Batch_Loss: 0.0290249288 Max_Batch_Loss: 0.2566887736
+[2026-01-23 23:26:11] Epoch 80/500  Loss: 0.0706486541 Min_Batch_Loss: 0.0307508502 Max_Batch_Loss: 0.2550555170
+[2026-01-23 23:26:19] Epoch 81/500  Loss: 0.0706395264 Min_Batch_Loss: 0.0295263641 Max_Batch_Loss: 0.2339538336
+[2026-01-23 23:26:27] Epoch 82/500  Loss: 0.0705951367 Min_Batch_Loss: 0.0290589351 Max_Batch_Loss: 0.2265032679
+[2026-01-23 23:26:36] Epoch 83/500  Loss: 0.0705807375 Min_Batch_Loss: 0.0298339464 Max_Batch_Loss: 0.2577708960
+[2026-01-23 23:26:44] Epoch 84/500  Loss: 0.0705599620 Min_Batch_Loss: 0.0296005625 Max_Batch_Loss: 0.2444774806
+[2026-01-23 23:26:52] Epoch 85/500  Loss: 0.0705579773 Min_Batch_Loss: 0.0297325589 Max_Batch_Loss: 0.2694331110
+[2026-01-23 23:27:00] Epoch 86/500  Loss: 0.0705408495 Min_Batch_Loss: 0.0278043486 Max_Batch_Loss: 0.2259732783
+[2026-01-23 23:27:08] Epoch 87/500  Loss: 0.0705492932 Min_Batch_Loss: 0.0307321679 Max_Batch_Loss: 0.2064153701
+[2026-01-23 23:27:15] Epoch 88/500  Loss: 0.0704682057 Min_Batch_Loss: 0.0293240398 Max_Batch_Loss: 0.2199756503
+[2026-01-23 23:27:23] Epoch 89/500  Loss: 0.0705017503 Min_Batch_Loss: 0.0252472199 Max_Batch_Loss: 0.2668380439
+[2026-01-23 23:27:31] Epoch 90/500  Loss: 0.0705157127 Min_Batch_Loss: 0.0280945487 Max_Batch_Loss: 0.2545853555
+[2026-01-23 23:27:39] Epoch 91/500  Loss: 0.0704952367 Min_Batch_Loss: 0.0298441593 Max_Batch_Loss: 0.2181262970
+[2026-01-23 23:27:45] Traceback (most recent call last):
+[2026-01-23 23:27:45]   File "<frozen runpy>", line 198, in _run_module_as_main
+[2026-01-23 23:27:45]   File "<frozen runpy>", line 88, in _run_code
+[2026-01-23 23:27:45]   File "/home/soeren/PycharmProjects/ResonatorML/scripts/training/train_loop_network.py", line 7, in <module>
+[2026-01-23 23:27:45]     train.execute()
+[2026-01-23 23:27:45]   File "/home/soeren/PycharmProjects/ResonatorML/resonator_ml/core/use_cases/training.py", line 43, in execute
+[2026-01-23 23:27:45]     model = self.trainer.train_neural_network(self.model, dataloader, epoch_callback=print_callback)
+[2026-01-23 23:27:45]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[2026-01-23 23:27:45]   File "/home/soeren/PycharmProjects/ResonatorML/resonator_ml/machine_learning/loop_filter/neural_network.py", line 207, in train_neural_network
+[2026-01-23 23:27:45]     optimizer.step()
+[2026-01-23 23:27:45]   File "/home/soeren/PycharmProjects/ResonatorML/.venv/lib/python3.12/site-packages/torch/optim/optimizer.py", line 517, in wrapper
+[2026-01-23 23:27:45]     out = func(*args, **kwargs)
+[2026-01-23 23:27:45]           ^^^^^^^^^^^^^^^^^^^^^
+[2026-01-23 23:27:45]   File "/home/soeren/PycharmProjects/ResonatorML/.venv/lib/python3.12/site-packages/torch/optim/optimizer.py", line 82, in _use_grad
+[2026-01-23 23:27:45]     ret = func(*args, **kwargs)
+[2026-01-23 23:27:45]           ^^^^^^^^^^^^^^^^^^^^^
+[2026-01-23 23:27:45]   File "/home/soeren/PycharmProjects/ResonatorML/.venv/lib/python3.12/site-packages/torch/optim/adam.py", line 247, in step
+[2026-01-23 23:27:45]     adam(
+[2026-01-23 23:27:45]   File "/home/soeren/PycharmProjects/ResonatorML/.venv/lib/python3.12/site-packages/torch/optim/optimizer.py", line 150, in maybe_fallback
+[2026-01-23 23:27:45]     return func(*args, **kwargs)
+[2026-01-23 23:27:45]            ^^^^^^^^^^^^^^^^^^^^^
+[2026-01-23 23:27:45]   File "/home/soeren/PycharmProjects/ResonatorML/.venv/lib/python3.12/site-packages/torch/optim/adam.py", line 953, in adam
+[2026-01-23 23:27:45]     func(
+[2026-01-23 23:27:45]   File "/home/soeren/PycharmProjects/ResonatorML/.venv/lib/python3.12/site-packages/torch/optim/adam.py", line 422, in _single_tensor_adam
+[2026-01-23 23:27:45]     if torch.is_complex(param):
+[2026-01-23 23:27:45]        ^^^^^^^^^^^^^^^^^^^^^^^
+[2026-01-23 23:27:45] KeyboardInterrupt
