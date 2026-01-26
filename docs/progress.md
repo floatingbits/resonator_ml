@@ -286,3 +286,34 @@ Most importantly I can now ask further questions concerning the whole theory of 
 that it is too abstract, because I cannot try it out immediately or because my project has got so many other unfinished 
 businesses that I cannot focus on looking deeper into the meaning and effects of training parameters.
 
+## Deep Learning Deep Dive
+
+### Hyperparameters Exploration
+
+Now that I have a proper environment with a traceable history of parameters and results as well as a visualization tool
+set up, it is much more comfortable to dive deeper into the analysis of the system's behavior and the effect of each parameter.
+A good thing in today's era of AI is that once a question arises in my mind, I can instantly ask an LLM instead of having to 
+wait for the next time seeing my professor or colleague or getting an answer in an online-forum.  
+
+#### Batch Size vs Learn Rate
+
+The first thing question that came to my mind was about the relation between Batch Size and Learn Rate, which I guess would
+have been well known to me if I had more experience in Deep Learning. I was able to reproduce the **linear scaling rule**, 
+but interestingly for my progress, outside the recommended range of 126-256 as a maximum batch size, the noise between
+batch losses went up. Maybe it is just the usual effect of "more batch numbers have a smoother average than less", but still
+the idea of loss distribution, and the importance of difficult training samples for the overall performance of the fed 
+back system came to my mind. 
+
+#### Epoch Loss Plot interpretation
+
+Also, the importance of the "number of performed updates per epoch", which varies with batch_size, number of training samples 
+can be seen impressively in the plots. Each graph in my plot is only really comparable with the same update rate per epoch, 
+or must be at least be transformed mentally to be interpreted. 
+
+### Loss Distribution among samples and questioning my loss function
+
+### Adjusted Loss Function for the Win
+
+
+
+
