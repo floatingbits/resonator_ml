@@ -7,8 +7,8 @@ from resonator_ml.machine_learning.loop_filter.training_data import TrainingData
 from resonator_ml.ports.file_storage import FileStorage, DictStorage
 import torch.nn as nn
 
-def print_callback(epoch: int, epochs: int, epoch_loss: float):
-    print(f"Epoch {epoch + 1}/{epochs}  Loss: {epoch_loss:.10f}")
+def print_callback(epoch: int, epochs: int, epoch_loss: float, min_batch_loss: float, max_batch_loss: float):
+    print(f"Epoch {epoch + 1}/{epochs}  Loss: {epoch_loss:.10f} Min_Batch_Loss: {min_batch_loss:.10f} Max_Batch_Loss: {max_batch_loss:.10f}")
 
 
 class TrainLoopNetwork:
@@ -29,7 +29,6 @@ class TrainLoopNetwork:
         dataloader = self.training_data_generator.generate_training_dataloader()
         dataloader_time = time.time()
         print("Dataloader time ", dataloader_time - start, "seconds!")
-        model = self.trainer.train_neural_network(self.model, dataloader, epoch_callback=print_callback)
 
         params = {
             'instrument': self.app_config.instrument_name,
@@ -40,10 +39,15 @@ class TrainLoopNetwork:
             'num_hidden': self.model.hidden
         }
         self.params_storage.save_dict(params)
+
+        model = self.trainer.train_neural_network(self.model, dataloader, epoch_callback=print_callback)
+
+
         # Save
         # TODO once logging is cleaned up, this is the right spot to make the new version
         # self.file_storage.make_new_version_output_dir() # Training the network means new version
-        torch.save(model.state_dict(), self.file_storage.model_file_path())
+        # Saving now in train
+        # torch.save(model.state_dict(), self.file_storage.model_file_path())
 
         print("Training abgeschlossen.")
         end = time.time()

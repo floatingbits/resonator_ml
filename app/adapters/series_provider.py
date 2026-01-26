@@ -17,7 +17,7 @@ def parse_training_logs_loss(log_text: str) -> List[float]:
             # epoch = int(epoch_part)
 
             # Split nach "Loss: "
-            loss_part = line.split('Loss: ')[1]
+            loss_part = line.split('Loss: ')[1].split('Min_Batch')[0]
             loss = float(loss_part)
 
             results.append( loss)
@@ -48,7 +48,7 @@ class TrainingLossSeriesProvider(SeriesProvider):
 
 
     def files(self):
-        return list(self.search_path.rglob("train_loop_network.log"))
+        return sorted(list(self.search_path.rglob("train_loop_network.log")), key=lambda p: int(p.parent.name))
     def data_at(self, index: int):
         filepath = self.files()[index]
         with open(filepath, 'r') as file:

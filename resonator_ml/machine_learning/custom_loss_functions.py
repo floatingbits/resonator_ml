@@ -9,21 +9,24 @@ eps = 1e-8
 # ----------------------------
 def relative_mse(pred, target, eps=1e-8):
     denom = target.pow(2) + eps
-    return ((pred - target).pow(2) / denom).mean()
+    return (pred - target).pow(2) / denom
 
 
 # ----------------------------
 # 2) Relative L1 (per sample) -- robuster gegen Ausreisser
 #    loss = mean( |pred - target| / (|target| + eps) )
 # ----------------------------
-def relative_l1(pred, target, eps=1e-4):
-    denom = target.abs() + eps
-    return ( (pred - target).abs() / denom ).mean()
+def relative_l1(pred, target, x_input, eps=1e-2):
+    denom = energy(x_input) + eps
+    return  (pred - target).abs() / denom
 
-def relative_l1_with_penalty(pred, target):
-    return magnitude_penalty_loss(pred, target, relative_l1, alpha=3)
+def relative_l1_with_penalty(pred, target, x_input):
+    return magnitude_penalty_loss(pred, target, x_input, relative_l1, alpha=1)
 
-def magnitude_penalty_loss(y_pred, y_true, base_loss_fn, alpha=1.0, eps=1e-4):
+def energy(x_input):
+    return torch.sqrt((x_input**2).mean(dim=-1))
+
+def magnitude_penalty_loss(y_pred, y_true, x_input, base_loss_fn, alpha=1.0, eps=1e-2):
     """
     y_pred, y_true: Tensor gleicher Form
     base_loss_fn: z.B. torch.nn.functional.mse_loss (reduction='none')
@@ -31,7 +34,8 @@ def magnitude_penalty_loss(y_pred, y_true, base_loss_fn, alpha=1.0, eps=1e-4):
     """
 
     # Basis-Loss (z.B. MSE pro Element)
-    base_loss = base_loss_fn(y_pred, y_true)
+    base_loss = base_loss_fn(y_pred, y_true, x_input)
+
 
     # Betrag vergleichen
     abs_pred = torch.abs(y_pred)
@@ -40,12 +44,13 @@ def magnitude_penalty_loss(y_pred, y_true, base_loss_fn, alpha=1.0, eps=1e-4):
     # Überschreitung
     excess = torch.relu(abs_pred - abs_true)
     # excess = max(0, |pred| - |true|)
-    denom = y_true.abs() + eps
+
+    denom = energy(x_input) + eps
 
     penalty = alpha * excess / denom
 
     # Gesamt-Loss
-    return (base_loss + penalty).mean()
+    return base_loss + penalty
 
 # ----------------------------
 # 3) Log-amplitude MSE (dB-ähnlich)
@@ -83,7 +88,7 @@ def inv_rms_weighted_mse(pred, target, frame_size, floor=1e-4, eps=1e-8):
     rms_t = torch.sqrt((target**2).mean(dim=1) + eps)  # [B]
     weights = 1.0 / torch.clamp(rms_t, min=floor)
     mse_per_frame = ((pred - target)**2).mean(dim=1)  # [B]
-    return (mse_per_frame * weights).mean()
+    return mse_per_frame * weights
 
 
 # ----------------------------

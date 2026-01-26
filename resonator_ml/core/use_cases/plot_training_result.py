@@ -1,5 +1,5 @@
 from resonator_ml.machine_learning.view.training import TimeSeriesPlotter
-import numpy as np
+import random
 
 from resonator_ml.ports.series_provider import SeriesProvider
 
@@ -16,12 +16,14 @@ class PlotTrainingResult:
 
         # Füge mehrere Zeitreihen hinzu
         for n in range(self.series_provider.num_plots()):
-            plotter.add_series(self.series_provider.data_at(n), label=self.series_provider.title_at(n))
+            if n > self.series_provider.num_plots() - 11:
+                plotter.add_series(self.series_provider.data_at(n), label=self.series_provider.title_at(n),
+                               linestyle=random.choice(["-", "--", "-.", ":"]))
 
 
         # Passe den Plot an
         plotter.customize(
-            title='Zeitreihen-Darstellung',
+            title='Epoch vs Loss',
             xlabel='Epoch',
             ylabel='Loss',
             grid=True,

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from torch.utils.data import DataLoader, Dataset
 
 from resonator_ml.audio.util import frame_batch_generator
-from resonator_ml.machine_learning.training import TrainingParameters
+from resonator_ml.machine_learning.training.parameters import TrainingParameters
 from resonator_ml.utility.random import ReproRNG
 
 TRAINING_DATA_BASE_PATH = "data/processed"
@@ -60,7 +60,7 @@ class NeuralNetworkDataset(Dataset):
         return len(self.inputs)
 
     def __getitem__(self, idx):
-        return self.inputs[idx], self.targets[idx]
+        return self.inputs[idx], self.targets[idx], idx
 
     def add(self, dataset: 'NeuralNetworkDataset'):
         self.inputs = torch.vstack([self.inputs, dataset.inputs])

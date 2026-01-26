@@ -1,6 +1,6 @@
 from resonator_ml.machine_learning.loop_filter.training_data import TrainingDataGenerator, prepare_dataloader, \
     TrainingFileDescriptor
-from resonator_ml.machine_learning.training import TrainingParameters
+from resonator_ml.machine_learning.training.parameters import TrainingParameters
 from resonator_ml.machine_learning.view.audio import BatchFeatureViewer
 import matplotlib.pyplot as plt
 

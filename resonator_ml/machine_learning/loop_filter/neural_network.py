@@ -13,7 +13,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from resonator_ml.machine_learning.training import TrainingParameters
+from resonator_ml.machine_learning.training.analysis import PerSampleLossTracker
+from resonator_ml.machine_learning.training.parameters import TrainingParameters
 
 
 class NeuralNetworkModule(nn.Module):
@@ -172,36 +173,64 @@ class NeuralNetworkResonatorFactory:
 
 
 class Trainer:
-    def __init__(self, training_parameters: TrainingParameters):
+    def __init__(self, training_parameters: TrainingParameters, model_path: str):
         self.training_parameters = training_parameters
+        self.model_path = model_path
 
     def train_neural_network(self, model, dataloader, device="cpu",
-                             epoch_callback: Callable[[int, int, float], None]=None):
+                             epoch_callback: Callable[[int, int, float, float, float], None]=None):
         model = model.to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=self.training_parameters.learning_rate)
 
+        best_training = float("inf")
+
+        torch.set_printoptions(sci_mode=True)
+        dataset_len = len(dataloader.dataset)
+        tracker = PerSampleLossTracker()
         for epoch in range(self.training_parameters.epochs):
             epoch_loss = 0.0
-
-            for x_input, y_target in dataloader:
+            max_batch_loss = 0.0
+            min_batch_loss = float("inf")
+            for x_input, y_target, ids in dataloader:
                 x_input = x_input.to(device)
                 y_target = y_target.to(device)
 
-                # Vorwärts
                 y_pred = model(x_input)
 
-                # Loss im Sample-Bereich
-                loss = self.training_parameters.loss_function(y_pred, y_target)
+                per_sample_loss = self.training_parameters.loss_function(y_pred, y_target, x_input).mean(dim=1)
+                loss = per_sample_loss.mean()
+
 
                 # Rückwärts
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                batch_loss = loss.item()
+                epoch_loss += batch_loss * len(x_input)
+                if batch_loss > max_batch_loss:
+                    max_batch_loss = batch_loss
+                if batch_loss < min_batch_loss:
+                    min_batch_loss = batch_loss
 
-                epoch_loss += loss.item() * len(x_input)
+                # tracker.update(ids, per_sample_loss, y_pred=y_pred)
 
+            # worst_samples = tracker.worst_samples(k=10, by="quantile", q=0.95)
+            # for idx, loss, prediction, max_prediction, min_prediction, last_prediction in worst_samples:
+            #     print(idx, "Loss: ", loss, "Prediction(mean, max, min):", prediction, max_prediction, min_prediction, last_prediction)
+            #     print(dataloader.dataset.__getitem__(idx))
+
+            loss_average = epoch_loss / dataset_len
+            # TODO: Use validation loss
+            if loss_average < best_training:
+                best_training = loss_average
+                torch.save(model.state_dict(), self.model_path)
             if epoch_callback:
-                epoch_callback(epoch, self.training_parameters.epochs, epoch_loss / len(dataloader.dataset))
+                epoch_callback(epoch, self.training_parameters.epochs, loss_average, min_batch_loss, max_batch_loss)
+
+        print("Autocorrelation of sample loss between epochs")
+        for sid, _, _ in tracker.persistent_hard_samples(k=10):
+            print(sid, tracker.loss_autocorrelation(sid))
+
 
         return model
 

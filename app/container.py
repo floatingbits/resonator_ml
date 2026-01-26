@@ -6,7 +6,7 @@ from resonator_ml.machine_learning.loop_filter.neural_network import NeuralNetwo
     NNResonatorInitializer
 from resonator_ml.machine_learning.loop_filter.training_data import TrainingFileDescriptor, TrainingDataGenerator, \
     FilepathGenerator, TrainingFileFinder, TrainingDatasetCache
-from resonator_ml.machine_learning.training import TrainingParameterFactory
+
 import torch
 
 from resonator_ml.ports.file_storage import FileStorage, DictStorage
@@ -48,7 +48,7 @@ def nn_resonator(load_model_weights: bool, initialize_resonator: bool):
 
 
 def trainer():
-    return Trainer(training_parameters())
+    return Trainer(training_parameters(), model_path=file_storage().model_file_path().as_posix())
 
 def training_file_descriptor():
     config = app_config()
