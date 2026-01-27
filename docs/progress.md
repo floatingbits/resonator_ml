@@ -310,10 +310,65 @@ Also, the importance of the "number of performed updates per epoch", which varie
 can be seen impressively in the plots. Each graph in my plot is only really comparable with the same update rate per epoch, 
 or must be at least be transformed mentally to be interpreted. 
 
-### Loss Distribution among samples and questioning my loss function
+### Loss Distribution across the training set and questioning my loss function
+
+Playing around with batch sizes and interpreting the cross epoch losses, I tried to make up a mental picture of the loss
+distribution of the training set. I suspected a pretty large right tailed distribution with some extraordinarily high 
+loss samples that I wanted to understand. So I asked my LLM to suggest a debugging strategy and code that revealed not only the
+statistics and distribution, but also the individual sample data of the highest loss ones.  
+What immediately became clear was that zero crossing posed a big problem for the network when judging with a loss function
+that is relative to the target. Zero crossings and the near zero targets that come with them have a particular property
+that makes relative-to-target evaluation unsuitable: While the inputs can be orders of magnitude higher, we are 
+judging the systems by its ability to hit the target by a precision that is not matched by the inputs, and thus "unfair"
+toward the system. That makes the according samples disturb the learning process by attributing very high gradients to them 
+and thus pulling **inadequately high attention** towards samples of **average** meaningfulness.   
+
 
 ### Adjusted Loss Function for the Win
 
+A much smoother learning process could be achieved when the loss function was using **a scale derived from the energy
+present in the input data**. That way, we evaluate the performance in a much fairer way, which we can see in the behaviour 
+of the highest loss samples: They constantly improve their prediction towards the target and there is much more stable 
+movement. Samples slowly drop out of the Top 10 and overall losses improve constantly.  
+
+### Suspiciously well predicted samples
+
+Still, the final rendered audio file, derived from the fed back system, showed unstable behaviour, so I needed to have 
+a further look at loss statistics, input samples and the likes. What I found should reveal the biggest, and most naive 
+error I made in my initial setup: While I intended and expected the network to use mainly the delay line of the full period
+length, I saw that the predictions were often much better than what could be derived from just looking at what happened
+one period ago.  
+It soon came to my mind that delivering input samples of t-1 and t-2 had two very negative effects both on 
+learning and the resulting fed back system's stability. The first problem is that we **offer a very easy (and unrealistic)
+way for the network** 
+to predict a result when real input values are given. The very last to samples are very close to the target and thus there is
+no need for the network to take the full period delay into account. The second negative effect is that in the fed back 
+inference, we will not have "real world" independent input samples of t-1 and t-2, but these values are directly fed back 
+from our output. Depending on the weights (or coefficients in linear filter speak) we build **unstable IIR filters** that way.  
+While the intention to give the system the possibility of acting as an IIR filter might have been well-meaning, the outcome
+is literally catastrophic: I created an unstable system that, depending only on random chance in the training process, 
+could build up energy and break all system boundaries if it wasn't restraint by the network's tanh() function.  
+
+### First successful decay of a simulated strat string
+
+**When the direct t-1 and t-2 input features were removed**, voilà, suddenly a smoothly and stably decaying 
+[audio file](./../data/results/resonator/documentation/first_success_with_strat/output_1.wav) could
+be rendered. While a comparison by ear clearly reveals differences in the course of the frequency distribution and overall
+liveliness, this version is clearly something to build further efforts upon. The question will be what it takes to get
+more faithful and convincing results (and to what extent faithful and convincing even mean the same thing).
+
+### More precise predictions with a bigger network?
+
+One way to try to get into the direction of "rendering a sound closer to the original" is to try to make the individual 
+predictions better, meaning "reducing the loss". The easiest way, and admittedly the most naive, way to achieve this is
+to add hidden neurons to the network. While to some extent, drastically increasing the amount of neurons DID result in a
+reduced average loss, the eventually rendered audio file did NOT improve at all. It even got instable again. My explanation
+for this is that the generalization capabilities of the network decreased and now the effect of certain training samples
+suggesting a perceived momentary amplification of the system are gaining importance again and are not "lost" anymore
+in the averaging process.   
+I guess this is the point where our deep dive into the meaning and effects of training and network hyperparameters needs
+to pause and the feature extraction process (see [thoughts about physical knowledge](#thoughts-about-physical-knowledge))
+needs to be taken more into the focus again. 
 
 
 
