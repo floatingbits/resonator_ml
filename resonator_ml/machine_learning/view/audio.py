@@ -25,6 +25,7 @@ class BatchFeatureViewer:
         )
 
         self.fig.canvas.mpl_connect("key_press_event", self.on_key)
+
         self.draw()
 
     def draw(self):
@@ -51,7 +52,7 @@ class BatchFeatureViewer:
             self.axes[0].text(
                 bar.get_x() + bar.get_width() / 2,
                 height/2,
-                f"{height:.3f}",
+                f"{height:.3e}",
                 ha="center",
                 va="bottom",
                 fontsize=8
@@ -62,7 +63,7 @@ class BatchFeatureViewer:
             self.axes[1].text(
                 bar.get_x() + bar.get_width() / 2,
                 height/2,
-                f"{height:.3f}",
+                f"{height:.3e}",
                 ha="center",
                 va="bottom",
                 fontsize=8
