@@ -21,11 +21,12 @@ class Config:
     base_frequency: float = 82.46
     output_soundfile_length: float = 5
     training_parameters: TrainingParameters = field(default_factory=lambda : TrainingParameters(batch_size=128, epochs=500, learning_rate=3e-4,
-                                          loss_function=relative_l1_with_penalty, max_training_data_frames=400000))
+                                          loss_function=relative_l1_with_penalty, max_training_data_frames=400001, use_energy_and_decay=True))
     neural_network_parameters: NeuralNetworkParameters = field(default_factory=lambda : NeuralNetworkParameters(
         num_hidden_per_layer=1500,
         num_hidden_layers=1,
-        delay_patterns=[DelayPattern(1, 3, 2),DelayPattern(0.25, 2, 2),DelayPattern(0.75, 2, 2),DelayPattern(0.5, 2, 2)]
+        delay_patterns=[DelayPattern(1, 3, 2),DelayPattern(0.25, 2, 2),DelayPattern(0.75, 2, 2),DelayPattern(0.5, 2, 2)],
+        use_decay_feature=True
     ))
 
 

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from torch.utils.data import DataLoader, Dataset
 
+from resonator_ml.audio.metering import DecayMeter
 from resonator_ml.audio.util import frame_batch_generator
 from resonator_ml.machine_learning.training.parameters import TrainingParameters
 from resonator_ml.utility.random import ReproRNG
@@ -92,7 +93,9 @@ class TrainingDatasetCache:
         )
 
 
-
+def make_lookahead_signal(x: np.ndarray, lookahead: int):
+    pad = np.zeros((lookahead, *x.shape[1:]), dtype=x.dtype)
+    return np.concatenate([x[lookahead:], pad], axis=0)
 
 
 class TrainingDataGenerator:
@@ -145,11 +148,29 @@ class TrainingDataGenerator:
 
         # for initialization, we need to feed at least so many samples into the multi-tap delay that the longest
         # of delays is completely full and outputs the first sample
-        max_delay_samples = 550
-        init_samples = signal[:max_delay_samples]
+        period_delay_in_samples = 550 # TODO: proper length of delay
+        max_delay_samples = period_delay_in_samples
+        num_lookahead_samples = period_delay_in_samples
+        window_size = period_delay_in_samples
+        init_samples = signal[:(max_delay_samples + num_lookahead_samples)]
+        decay_inertia = pow(0.5,1/period_delay_in_samples)
         self.delay.prepare()
         self.delay.process_mono_split(init_samples)  # output can be ignored
         remaining_signal = signal[max_delay_samples:]
+        average_decay = None
+        decay_meter = None
+
+        if self.training_parameters.use_energy_and_decay:
+            # window_size = int(self.training_parameters.energy_window_size_in_s * samplerate)
+            time_in_samples = 5*int(samplerate) # 5 seconds for average decay measuring
+            average_decay_meter = DecayMeter(window_size=window_size, sample_rate=int(samplerate),time_in_samples=time_in_samples)
+            decay_output = average_decay_meter.process_mono(signal[:(time_in_samples + window_size + 1)])
+            # average decay per period in dB
+            average_decay = decay_output[-1]*period_delay_in_samples/time_in_samples
+            decay_meter = DecayMeter(window_size=window_size, sample_rate=int(samplerate),time_in_samples=period_delay_in_samples)
+            num_lookahead_samples = period_delay_in_samples
+            decay_meter.prepare()
+            decay_meter.process_mono(init_samples)
 
         input_list = []
         target_list = []
@@ -162,23 +183,43 @@ class TrainingDataGenerator:
         skip_probability = 1 - min(1, max_frames/len(remaining_signal))
         # reproducible random number generator to get reproducible results while randomly reducing training data
         rng = ReproRNG(100)
-        for frame in frame_batch_generator(remaining_signal, 1):
+
+        batch_size = 1
+        main_gen = frame_batch_generator(remaining_signal, batch_size)
+        decay_parameter = 0
+        for frame in main_gen:
 
             delay_output = self.delay.process_mono_split(frame)
+            if self.training_parameters.use_energy_and_decay:
+                decay_output = decay_meter.process_mono(frame)
+                # Map roughly +-0.04 scale to -1...1, with average at 0.
+                decay_scale = 0.04
+                new_decay_parameter = float((decay_output[0] - average_decay) / decay_scale)
+                decay_parameter = decay_inertia*decay_parameter + (1-decay_inertia)*new_decay_parameter
+                # apply minmax clipping only on actual training parameter, not before applying inertia.
+                decay_row = np.array([[min(max(decay_parameter,-1),1)]])
+            else:
+                decay_row = None
             if skip_probability and rng.bernoulli(skip_probability):
                 # Reduce Training data so that we can also use the tail of the file without slowing down training too much
                 continue
 
             delay_row = delay_output.T  # Transpose because trainingdata expects rows instead of columns
+            concatenate_rows = [delay_row, controls_row]
+            if decay_row:
+                concatenate_rows.append(decay_row)
 
-            inputs_concatenated = np.concatenate([delay_row, controls_row], axis=1)
+            inputs_concatenated = np.concatenate(concatenate_rows, axis=1)
             target_list.append(frame)
             input_list.append(inputs_concatenated)
 
             # force symmetric behaviour by adding symmetric training sample
             negative_delay_row = delay_row * -1
             negative_frame = frame * -1
-            negative_inputs_concatenated = np.concatenate([negative_delay_row, controls_row], axis=1)
+            concatenate_rows = [negative_delay_row, controls_row]
+            if decay_row:
+                concatenate_rows.append(decay_row)
+            negative_inputs_concatenated = np.concatenate(concatenate_rows, axis=1)
             target_list.append(negative_frame)
             input_list.append(negative_inputs_concatenated)
 

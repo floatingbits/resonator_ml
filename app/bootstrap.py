@@ -1,21 +1,27 @@
 from app.container import training_parameters, nn_resonator, training_data_generator, out_filepath, \
     app_config, file_storage, training_loss_series_provider, parameters_storage, trainer
+from resonator_ml.core.use_cases.plot_training_data import PlotTrainingData
 from resonator_ml.core.use_cases.plot_training_result import PlotTrainingResult
 from resonator_ml.core.use_cases.sound_generation import GenerateSoundFile
 from resonator_ml.core.use_cases.training import TrainLoopNetwork
 from resonator_ml.machine_learning.loop_filter.neural_network import Trainer
-
+import shutil
 from utils.stdout_redirect import redirect_stdout_to_file
 
-def build_train_loop_network_use_case():
+def build_train_loop_network_use_case(reuse_previous_model=False):
 
 
     training_params = training_parameters()
 
     resonator = nn_resonator(load_model_weights=False, initialize_resonator=False)
     storage = file_storage()
-    # TODO clean up logging + versioning
+
+    # TODO clean up logging + versioning. Doesn't belong here at all...
+    old_model_path = storage.model_file_path()
     storage.make_new_version_output_dir()
+    if reuse_previous_model:
+        shutil.copyfile(old_model_path, storage.model_file_path())
+
     configure_stdout('train_loop_network')
     print (app_config())
     print(training_params)
@@ -33,6 +39,10 @@ def build_generate_sound_file_use_case():
 def build_plot_training_result_use_case():
 
     return PlotTrainingResult(training_loss_series_provider())
+
+def build_plot_training_data_use_case():
+
+    return PlotTrainingData(training_data_generator())
 
 
 def configure_stdout(log_name: str):

@@ -40,6 +40,9 @@ class TrainLoopNetwork:
         }
         self.params_storage.save_dict(params)
 
+        if self.file_storage.model_file_path().exists():
+            self.model.load_state_dict(torch.load(self.file_storage.model_file_path()))
+
         model = self.trainer.train_neural_network(self.model, dataloader, epoch_callback=print_callback)
 
 

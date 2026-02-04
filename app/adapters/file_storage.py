@@ -77,6 +77,7 @@ class LocalFileSystemStorage(FileStorage):
             serialized_patters = "+" + serialized_patters + str(pattern.n_before) + "_" + str(pattern.n_after) + "_" + str(pattern.t_factor)+ "-"
         cache_key_object = [
             self.config.training_parameters.max_training_data_frames,
+            self.config.neural_network_parameters.use_decay_feature,
             serialized_patters,
             self.config.instrument_name
         ]

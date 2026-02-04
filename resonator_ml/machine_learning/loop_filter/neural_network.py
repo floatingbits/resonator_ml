@@ -110,11 +110,12 @@ class DummyControlInputProvider(ControlInputProvider):
 
 
 class NeuralNetworkResonator(MonoProcessor):
-    def __init__(self, model:NeuralNetworkModule, delay: NnResonatorDelay, controls: ControlInputProvider, sample_rate: int):
+    def __init__(self, model:NeuralNetworkModule, delay: NnResonatorDelay, controls: ControlInputProvider, sample_rate: int, use_decay_feature: bool):
         super().__init__(sample_rate)
         self.model = model
         self.delay = delay
         self.controls = controls
+        self.use_decay_feature = use_decay_feature
 
     def process_mono(self, samples: MonoFrame) -> MonoFrame:
         # currently input samples are not used...
@@ -122,7 +123,10 @@ class NeuralNetworkResonator(MonoProcessor):
         control_inputs = self.controls.get_control_input_data()
         for i, sample in enumerate(samples):
             delay_out = self.delay.pull_multi_channel(1) # sample by sample as long as we do not have a smarter implementation
-            inputs = np.concatenate([delay_out.T[0], control_inputs], axis=0)
+            concatenation_array = [delay_out.T[0], control_inputs]
+            if self.use_decay_feature:
+                concatenation_array.append(np.array([-0.7]))
+            inputs = np.concatenate(concatenation_array, axis=0)
 
             out[i] = self.model.forward(torch.tensor(inputs, dtype=torch.float32))[0] # use the first output
             self.delay.push_mono(np.array([out[i]])) # push a single sample
@@ -149,6 +153,7 @@ class NeuralNetworkParameters:
     num_hidden_layers: int
     delay_patterns: list[DelayPattern]
     activation: nn.Module = nn.Tanh()
+    use_decay_feature: bool = False
 
 
 class NeuralNetworkResonatorFactory:
@@ -159,11 +164,15 @@ class NeuralNetworkResonatorFactory:
             self.create_neural_network_module(delay, controls, parameters=parameters),
             delay,
             controls,
-            sample_rate
+            sample_rate,
+            parameters.use_decay_feature
         )
 
     def create_neural_network_module(self, delay, controls, parameters: NeuralNetworkParameters):
-        return NeuralNetworkModule(len(delay.delays), len(controls.get_control_input_data()), n_hidden_layers=parameters.num_hidden_layers, activation=parameters.activation, hidden=parameters.num_hidden_per_layer)
+        num_inputs = len(delay.delays)
+        if parameters.use_decay_feature:
+            num_inputs += 1
+        return NeuralNetworkModule(num_inputs, len(controls.get_control_input_data()), n_hidden_layers=parameters.num_hidden_layers, activation=parameters.activation, hidden=parameters.num_hidden_per_layer)
 
     def create_neural_network_delay(self, sample_rate: int, parameters: NeuralNetworkParameters):
         return NnResonatorDelay(sample_rate, PatternDelayFactory(parameters.delay_patterns))
