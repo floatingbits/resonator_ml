@@ -1,4 +1,54 @@
 # Progress
+<!-- TOC -->
+* [Progress](#progress)
+  * [Initial setup](#initial-setup)
+    * [Network, feedback and features](#network-feedback-and-features)
+    * [Training data](#training-data)
+    * [Loss function](#loss-function)
+    * [Training process](#training-process)
+    * [Inference/sound generation](#inferencesound-generation)
+  * [First results](#first-results)
+    * [First measures](#first-measures)
+    * [More sophisticated thoughts](#more-sophisticated-thoughts)
+      * [The different behaviors](#the-different-behaviors)
+      * [Questioning my mental model](#questioning-my-mental-model)
+      * [...and deriving measures](#and-deriving-measures)
+  * [Further Progress and results](#further-progress-and-results)
+    * [Using Karplus Strong training sample](#using-karplus-strong-training-sample)
+    * [Using symmetric input](#using-symmetric-input)
+    * [Using a broader range of training samples](#using-a-broader-range-of-training-samples)
+    * [Thoughts about generalisation](#thoughts-about-generalisation)
+    * [Thoughts about physical knowledge](#thoughts-about-physical-knowledge)
+    * [First successful reproduction of KS Signals](#first-successful-reproduction-of-ks-signals)
+    * [Preliminary Conclusions](#preliminary-conclusions)
+  * [Refactorings](#refactorings)
+    * [Result folders and parameter documentation](#result-folders-and-parameter-documentation)
+      * [First approach and its flaws](#first-approach-and-its-flaws)
+      * [New result folder system](#new-result-folder-system)
+      * [Parameter and training success documentation](#parameter-and-training-success-documentation)
+    * [Flexible configuration](#flexible-configuration)
+    * [Training performance and caching](#training-performance-and-caching)
+    * [Project architecture](#project-architecture)
+    * [Monitoring tools](#monitoring-tools)
+    * [Effects of the refactoring: Ability to explore the parameter space and boost my DL training knowledge](#effects-of-the-refactoring-ability-to-explore-the-parameter-space-and-boost-my-dl-training-knowledge)
+  * [Deep Learning Deep Dive](#deep-learning-deep-dive)
+    * [Hyperparameters Exploration](#hyperparameters-exploration)
+      * [Batch Size vs Learn Rate](#batch-size-vs-learn-rate)
+      * [Epoch Loss Plot interpretation](#epoch-loss-plot-interpretation)
+    * [Loss Distribution across the training set and questioning my loss function](#loss-distribution-across-the-training-set-and-questioning-my-loss-function)
+    * [Adjusted Loss Function for the Win](#adjusted-loss-function-for-the-win)
+    * [Suspiciously well predicted samples](#suspiciously-well-predicted-samples)
+    * [First successful decay of a simulated strat string](#first-successful-decay-of-a-simulated-strat-string)
+    * [More precise predictions with a bigger network?](#more-precise-predictions-with-a-bigger-network)
+  * [Further Feature Engineering](#further-feature-engineering)
+    * [Modeling instable (perceived) decay](#modeling-instable-perceived-decay)
+    * [Stability Problems](#stability-problems)
+  * [Broader Range Training Data](#broader-range-training-data)
+    * [Synthetic Training data](#synthetic-training-data)
+    * [Discussing the results](#discussing-the-results)
+    * [Playing with parameters of the synthetic training data](#playing-with-parameters-of-the-synthetic-training-data)
+  * [Sequence Training](#sequence-training)
+<!-- TOC -->
 ## Initial setup
 ### Network, feedback and features
 The basic idea was to approximate a real string with a refined Karplus-Strong-Algorithm, where the loop filter is 
@@ -371,4 +421,70 @@ to pause and the feature extraction process (see [thoughts about physical knowle
 needs to be taken more into the focus again. 
 
 
+## Further Feature Engineering
+### Modeling instable (perceived) decay
+As described multiple times yet, it was time to set up the feature that tells the network that **currently** we are in 
+a more slowly decaying phase that even looks like an amplification, so **for now** it's ok to output that loud sample, 
+but whenever this decay parameter is lower, you need to adjust your output decay. 
 
+I was able to train a stable model, and when fed a constant value to that input feature, in general, 
+the decay adjusted itself accordingly. 
+But some more things to be said: The parameter was scaled and clipped to the range -1 (faster than usual decay) to +1 
+(slower than usual or even amplification), where 0 is supposed to mean the average decay rate of the input file. 
+The input feature was smoothed by an IIR Filter. 
+Setting the input value above +0.6 resulted in a slower decay than  +0.6, which wasn't supposed to be the case. Maybe the
+input data didn't provide enough data to train the range above. 
+I had the feeling that more and more instable versions appeared and that I had to look in even another direction for the cause.
+### Stability Problems
+It appeared that with introducing the new feature, the stability of the fed back system suffered. I tried to have a closer 
+look into the nature of the instabilities. 
+There were several patterns I recognized: 
+- I noticed that somehow my initializing process of the system seemed to have a bug that produced a little click and thus
+high frequency content. Somehow the network amplified these frequencies and they grew beyond all boundaries. At first there
+appeared only small sinus wavelets which looked like being distributed via the feedback delay network. 
+- In some cases very high frequencies appeared evenly in the waveform after 2-3 seconds and also did not stop being amplified
+until hitting a saturation boundary of the network
+- In the last case (maybe the same as previous case) the frequency growing beyond all boundaries was the first harmonic.
+
+Thinking about what was happening here and discussing with ChatGPT, I decided that it was most probable that the system
+did not see enough training data to be prepared for certain situations. And, paraphrasing ChatGPT, "all situations that
+are not included in the training data are an invitation for not working as suspected."
+
+## Broader Range Training Data
+### Synthetic Training data
+To really make sure the system is stable in all situations that it might see, although they are not really realistic on 
+a natural instrument, we need to produce training data that projects a sane way for the system to handle unusual situations. 
+We are dealing with a recursive system, so these unusual situations might even be produced by itself. In other real world 
+modeling situations we might be exposed to data that was neither present in our training NOR in our validation data, 
+so the training data needs to be as broad as possible. 
+
+I introduced several mechanisms for presenting the system data from which it can learn how to deal with input situations
+would have made it instable before. 
+
+- A dataset manipulation framework that can programmatically manipulate/add synthetic training samples
+- A "burst manipulator" that adds random sine bursts to the input features. (As this is what I witnessed first)
+- Synthetic training wave files which have been generated from a model, which behaved stable, but was initialized with 
+data from instable model outputs.
+- Real recordings of natural harmonics of the guitar string. By lightly touching certain locations of a string while plucking,
+the base frequency and the lower order overtones can be suppressed. When the finger is removed afterward, we have a
+completely valid decaying string system, only in a state not present in the training data before.
+
+### Discussing the results
+The good news: The system has achieved a good amount of stability. None of the versions I tried since showed an instable
+output. The bad news: We lost a good amount of realism and liveliness. While the first stable models offered  [a promising
+result](./../data/results/resonator/documentation/first_success_with_strat/output_1.wav) that showed a dynamic overtone spectrum, 
+[the results of the current model generation](./../data/results/resonator/documentation/stable_strat_after_synthetic_training_data/output.wav) 
+remind me of a quite simple karplus-strong type filter.
+Duller and less movement in the overtone spectrum, apart from losing the high tail faster.  
+But let's be realistic: We got what we wanted in the first place and this is the trade-off we are confronted with:
+Stability for treble content/overtones. When only thinking from one period to the next in a recursive system,
+the margin from realistic to instable is minuscule. And now that we do not seem to be on the instable side anymore, we
+are able to find the sweet spot in between and also dedicate ourselves to a training method that enables us better to tell
+the system what matters to us most. So let's find the levers to get back to the vivid spectrum results and find out if
+sequence training lets us teach better.
+
+### Playing with parameters of the synthetic training data
+TODO
+
+## Sequence Training
+TODO

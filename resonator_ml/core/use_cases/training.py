@@ -35,7 +35,7 @@ class TrainLoopNetwork:
             'batch_size': self.training_data_generator.training_parameters.batch_size,
             'lr': self.training_data_generator.training_parameters.learning_rate,
             'max_num_frames': self.training_data_generator.training_parameters.max_training_data_frames,
-            'num_layers': len(self.model.net),
+            'num_layers': len(self.model.common_net) + 1,
             'num_hidden': self.model.hidden
         }
         self.params_storage.save_dict(params)

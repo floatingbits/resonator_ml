@@ -10,11 +10,13 @@ class LocalFileSystemStorage(FileStorage):
         self.config = config
 
     def model_file_path(self) -> Path:
+        if self.config.model_file_path:
+            return Path(self.config.model_file_path)
         path = self._output_folder_path() / 'model.pt'
         return path
 
     def history_dirs(self) -> list[Path]:
-        base_path = self._output_folder_base_path()
+        base_path = self.output_folder_base_path()
         numeric_dirs = sorted(
             (
                 p for p in base_path.iterdir()
@@ -28,7 +30,7 @@ class LocalFileSystemStorage(FileStorage):
     def _output_folder_path(self) -> Path|None:
 
 
-        base_path = self._output_folder_base_path()
+        base_path = self.output_folder_base_path()
         current_version = self._current_path_version()
         if not current_version:
             return None
@@ -45,13 +47,13 @@ class LocalFileSystemStorage(FileStorage):
         )
         return max_number
 
-    def _output_folder_base_path(self) -> Path:
+    def output_folder_base_path(self) -> Path:
         path = Path('.')
         path = path / self.config.results_path / self.config.resonator_results_sub_path / self.config.instrument_name
         return path
 
     def make_new_version_output_dir(self) -> Path:
-        base_path = self._output_folder_base_path()
+        base_path = self.output_folder_base_path()
         current_version = self._current_path_version()
         if not current_version:
             current_version = 1

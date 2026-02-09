@@ -48,7 +48,7 @@ class TrainingLossSeriesProvider(SeriesProvider):
 
 
     def files(self):
-        return sorted(list(self.search_path.rglob("train_loop_network.log")), key=lambda p: int(p.parent.name))
+        return sorted(list(self.search_path.rglob("train*.log")), key=lambda p: int(p.parent.name))
     def data_at(self, index: int):
         filepath = self.files()[index]
         with open(filepath, 'r') as file:
