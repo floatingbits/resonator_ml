@@ -1,0 +1,8 @@
+{
+  "instrument": "Strat_E",
+  "batch_size": 128,
+  "lr": 0.0003,
+  "max_num_frames": 600000,
+  "num_layers": 3,
+  "num_hidden": 1500
+}

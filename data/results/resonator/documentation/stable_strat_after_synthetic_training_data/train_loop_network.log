@@ -1,0 +1,62 @@
+[2026-02-09 13:16:08] Config(model_file_path=None, initialize_sound_file_path=None, results_path='data/results', resonator_results_sub_path='resonator/workspace', resonator_training_path='data/processed/decay_only', cache_path='data/cache', loop_filer_training_data_cache_sub_path='loop_filter_training_data', instrument_name='Strat_E', training_parameters_version='v2.4', sample_rate=44100, base_frequency=82.97, output_soundfile_length=5, reuse_last_model_file=False, training_parameters=TrainingParameters(batch_size=128, epochs=500, learning_rate=0.0003, loss_function=<function relative_l1_with_penalty at 0x746e553636a0>, max_training_data_frames=600000, use_energy_and_decay=True, energy_window_size_in_s=0.01, decay_time_measure_time_in_s=0.05), neural_network_parameters=NeuralNetworkParameters(num_hidden_per_layer=1500, num_hidden_layers=1, delay_patterns=[DelayPattern(t_factor=1, n_before=10, n_after=10), DelayPattern(t_factor=0.75, n_before=10, n_after=10), DelayPattern(t_factor=0.25, n_before=10, n_after=10), DelayPattern(t_factor=0.5, n_before=10, n_after=10)], activation=Tanh(), use_decay_feature=True))
+[2026-02-09 13:16:08] TrainingParameters(batch_size=128, epochs=500, learning_rate=0.0003, loss_function=<function relative_l1_with_penalty at 0x746e553636a0>, max_training_data_frames=600000, use_energy_and_decay=True, energy_window_size_in_s=0.01, decay_time_measure_time_in_s=0.05)
+[2026-02-09 13:16:08] NeuralNetworkModule(
+[2026-02-09 13:16:08]   (common_net): Sequential(
+[2026-02-09 13:16:08]     (0): Linear(in_features=86, out_features=1500, bias=True)
+[2026-02-09 13:16:08]     (1): Tanh()
+[2026-02-09 13:16:08]   )
+[2026-02-09 13:16:08]   (audio_head): Linear(in_features=1500, out_features=1, bias=True)
+[2026-02-09 13:16:08]   (decay_head): Linear(in_features=1500, out_features=1, bias=True)
+[2026-02-09 13:16:08] )
+[2026-02-09 13:16:09] Loading dataset from cache
+[2026-02-09 13:16:09] Dataloader time  0.19288039207458496 seconds!
+[2026-02-09 13:16:34] Epoch 1/500  Loss: 0.0924918599 Min_Batch_Loss: 0.0210539270 Max_Batch_Loss: 5.2115797997
+[2026-02-09 13:17:00] Epoch 2/500  Loss: 0.0657292591 Min_Batch_Loss: 0.0210238621 Max_Batch_Loss: 0.2887085676
+[2026-02-09 13:17:26] Epoch 3/500  Loss: 0.0509739941 Min_Batch_Loss: 0.0196851846 Max_Batch_Loss: 0.2446627915
+[2026-02-09 13:17:51] Epoch 4/500  Loss: 0.0412492975 Min_Batch_Loss: 0.0171290580 Max_Batch_Loss: 0.1485158354
+[2026-02-09 13:18:24] Epoch 5/500  Loss: 0.0356726586 Min_Batch_Loss: 0.0180491898 Max_Batch_Loss: 0.1094250530
+[2026-02-09 13:18:50] Epoch 6/500  Loss: 0.0319519806 Min_Batch_Loss: 0.0157868844 Max_Batch_Loss: 0.0973385274
+[2026-02-09 13:19:33] Epoch 7/500  Loss: 0.0293292835 Min_Batch_Loss: 0.0165938009 Max_Batch_Loss: 0.0721890926
+[2026-02-09 13:20:12] Epoch 8/500  Loss: 0.0280532495 Min_Batch_Loss: 0.0146822156 Max_Batch_Loss: 0.0667746663
+[2026-02-09 13:20:54] Epoch 9/500  Loss: 0.0273299625 Min_Batch_Loss: 0.0150687424 Max_Batch_Loss: 0.0534832031
+[2026-02-09 13:21:21] Epoch 10/500  Loss: 0.0268923630 Min_Batch_Loss: 0.0160062257 Max_Batch_Loss: 0.0559485331
+[2026-02-09 13:21:47] Epoch 11/500  Loss: 0.0264576344 Min_Batch_Loss: 0.0155208148 Max_Batch_Loss: 0.0526795834
+[2026-02-09 13:22:20] Epoch 12/500  Loss: 0.0262040299 Min_Batch_Loss: 0.0149289165 Max_Batch_Loss: 0.0495234206
+[2026-02-09 13:23:05] Epoch 13/500  Loss: 0.0260296504 Min_Batch_Loss: 0.0160945468 Max_Batch_Loss: 0.0491328947
+[2026-02-09 13:23:51] Epoch 14/500  Loss: 0.0258961171 Min_Batch_Loss: 0.0145863723 Max_Batch_Loss: 0.0471870936
+[2026-02-09 13:24:23] Epoch 15/500  Loss: 0.0257739880 Min_Batch_Loss: 0.0161096342 Max_Batch_Loss: 0.0493028313
+[2026-02-09 13:24:50] Epoch 16/500  Loss: 0.0256949236 Min_Batch_Loss: 0.0156914890 Max_Batch_Loss: 0.0489761978
+[2026-02-09 13:25:17] Epoch 17/500  Loss: 0.0256203704 Min_Batch_Loss: 0.0147120245 Max_Batch_Loss: 0.0466139540
+[2026-02-09 13:25:41] Epoch 18/500  Loss: 0.0255745998 Min_Batch_Loss: 0.0150387995 Max_Batch_Loss: 0.0504510924
+[2026-02-09 13:26:02] Epoch 19/500  Loss: 0.0255129491 Min_Batch_Loss: 0.0146074751 Max_Batch_Loss: 0.0440493189
+[2026-02-09 13:26:23] Epoch 20/500  Loss: 0.0254540507 Min_Batch_Loss: 0.0150217190 Max_Batch_Loss: 0.0457100943
+[2026-02-09 13:26:45] Epoch 21/500  Loss: 0.0254423130 Min_Batch_Loss: 0.0138305817 Max_Batch_Loss: 0.0473986417
+[2026-02-09 13:27:09] Epoch 22/500  Loss: 0.0253767108 Min_Batch_Loss: 0.0141360881 Max_Batch_Loss: 0.0457746163
+[2026-02-09 13:27:30] Epoch 23/500  Loss: 0.0252965954 Min_Batch_Loss: 0.0151413213 Max_Batch_Loss: 0.0448357053
+[2026-02-09 13:27:52] Epoch 24/500  Loss: 0.0253444528 Min_Batch_Loss: 0.0140371220 Max_Batch_Loss: 0.0495782681
+[2026-02-09 13:28:13] Epoch 25/500  Loss: 0.0252577024 Min_Batch_Loss: 0.0147897853 Max_Batch_Loss: 0.0481295474
+[2026-02-09 13:28:35] Epoch 26/500  Loss: 0.0252530553 Min_Batch_Loss: 0.0149732763 Max_Batch_Loss: 0.0459024794
+[2026-02-09 13:28:57] Epoch 27/500  Loss: 0.0251985765 Min_Batch_Loss: 0.0147902966 Max_Batch_Loss: 0.0446618274
+[2026-02-09 13:29:18] Epoch 28/500  Loss: 0.0252138669 Min_Batch_Loss: 0.0140889958 Max_Batch_Loss: 0.0465446264
+[2026-02-09 13:29:20] Traceback (most recent call last):
+[2026-02-09 13:29:20]   File "<frozen runpy>", line 198, in _run_module_as_main
+[2026-02-09 13:29:20]   File "<frozen runpy>", line 88, in _run_code
+[2026-02-09 13:29:20]   File "/home/soeren/PycharmProjects/ResonatorML/app/main.py", line 25, in <module>
+[2026-02-09 13:29:20]     main()
+[2026-02-09 13:29:20]   File "/home/soeren/PycharmProjects/ResonatorML/app/main.py", line 19, in main
+[2026-02-09 13:29:20]     train.run(config)
+[2026-02-09 13:29:20]   File "/home/soeren/PycharmProjects/ResonatorML/app/commands/train.py", line 8, in run
+[2026-02-09 13:29:20]     train.execute()
+[2026-02-09 13:29:20]   File "/home/soeren/PycharmProjects/ResonatorML/resonator_ml/core/use_cases/training.py", line 46, in execute
+[2026-02-09 13:29:20]     model = self.trainer.train_neural_network(self.model, dataloader, epoch_callback=print_callback)
+[2026-02-09 13:29:20]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[2026-02-09 13:29:20]   File "/home/soeren/PycharmProjects/ResonatorML/resonator_ml/machine_learning/loop_filter/neural_network.py", line 241, in train_neural_network
+[2026-02-09 13:29:20]     loss.backward()
+[2026-02-09 13:29:20]   File "/home/soeren/PycharmProjects/ResonatorML/.venv/lib/python3.12/site-packages/torch/_tensor.py", line 625, in backward
+[2026-02-09 13:29:20]     torch.autograd.backward(
+[2026-02-09 13:29:20]   File "/home/soeren/PycharmProjects/ResonatorML/.venv/lib/python3.12/site-packages/torch/autograd/__init__.py", line 354, in backward
+[2026-02-09 13:29:20]     _engine_run_backward(
+[2026-02-09 13:29:20]   File "/home/soeren/PycharmProjects/ResonatorML/.venv/lib/python3.12/site-packages/torch/autograd/graph.py", line 841, in _engine_run_backward
+[2026-02-09 13:29:20]     return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+[2026-02-09 13:29:20]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[2026-02-09 13:29:20] KeyboardInterrupt
