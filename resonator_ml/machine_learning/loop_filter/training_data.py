@@ -6,10 +6,14 @@ from pathlib import Path
 
 from dataclasses import dataclass
 
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 
 from resonator_ml.audio.metering import DecayMeter
 from resonator_ml.audio.util import frame_batch_generator
+from resonator_ml.machine_learning.training.data import NeuralNetworkDataset, AudioTrainingDataGenerator, \
+    AudioMonoSplitFeatureExtractor, ConstantControlValueFeatureProvider, AudioDecayMeterFeatureExtractor, \
+    SimpleAudioFeatureExtractor, RandomTrainingDatasetReducer, RandomAudioBurstDatasetManipulator, \
+    SymmetricVersionDatasetManipulator, SequenceDataset
 from resonator_ml.machine_learning.training.parameters import TrainingParameters
 from resonator_ml.utility.random import ReproRNG
 
@@ -18,6 +22,7 @@ TRAINING_DATA_SUB_PATH_DECAY = "decay_only"
 
 
 def prepare_dataloader(dataset, batch_size=512):
+    sequence_dataset = SequenceDataset(wrapped_dataset=dataset, seq_len=20)
     return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 @dataclass
@@ -48,24 +53,6 @@ class FilepathGenerator:
                 .format(base_path=self.base_path,mode=self.mode,instrument=self.instrument,
                         fret_no=fret_no, exciter_type=exciter_type, extension=self.extension))
 
-class NeuralNetworkDataset(Dataset):
-    def __init__(self, inputs, targets):
-        """
-        windows: Tensor [N, n_inputs]
-        targets: Tensor [N, 1]
-        """
-        self.inputs = inputs
-        self.targets = targets
-
-    def __len__(self):
-        return len(self.inputs)
-
-    def __getitem__(self, idx):
-        return self.inputs[idx], self.targets[idx], idx
-
-    def add(self, dataset: 'NeuralNetworkDataset'):
-        self.inputs = torch.vstack([self.inputs, dataset.inputs])
-        self.targets = torch.vstack([self.targets, dataset.targets])
 
 class TrainingDatasetCache:
     def __init__(self, path: str):
@@ -82,7 +69,7 @@ class TrainingDatasetCache:
             self.path
         )
 
-    def load_dataset(self) -> NeuralNetworkDataset|None:
+    def load_dataset(self) -> NeuralNetworkDataset | None:
         cache_path = Path(self.path)
         if not cache_path.exists():
             return None
@@ -99,12 +86,15 @@ def make_lookahead_signal(x: np.ndarray, lookahead: int):
 
 
 class TrainingDataGenerator:
-    def __init__(self, training_parameters: TrainingParameters, training_file_descriptor: TrainingFileDescriptor, delay, controls, training_dataset_cache: TrainingDatasetCache):
+    def __init__(self, training_parameters: TrainingParameters, training_file_descriptor: TrainingFileDescriptor,
+                 delay, controls, training_dataset_cache: TrainingDatasetCache,
+                 base_frequency: float):
         self.training_parameters = training_parameters
         self.training_file_descriptor = training_file_descriptor
         self.delay = delay
         self.controls = controls
         self.training_dataset_cache = training_dataset_cache
+        self.base_frequency = base_frequency
 
     def get_or_create_dataset(self) -> NeuralNetworkDataset:
         dataset = self.training_dataset_cache.load_dataset()
@@ -137,8 +127,36 @@ class TrainingDataGenerator:
         dataset = self.get_or_create_dataset()
         return prepare_dataloader(dataset, batch_size=self.training_parameters.batch_size)
 
+    def generate_training_dataset_from_filepath(self, filepath: str, max_frames: int) -> NeuralNetworkDataset:
+        input_feature_extractors = []
+        input_feature_extractors.append(AudioMonoSplitFeatureExtractor(audio_processor=self.delay))
+        input_feature_extractors.append(ConstantControlValueFeatureProvider([0.0]))
+        period_delay_in_samples = window_size = 550
+        sample_rate = 44100
+        decay_meter = DecayMeter(window_size=window_size, sample_rate=int(sample_rate),time_in_samples=period_delay_in_samples)
+        input_feature_extractors.append(AudioDecayMeterFeatureExtractor(decay_meter=decay_meter))
+        output_feature_extractors = []
+        output_feature_extractors.append(SimpleAudioFeatureExtractor())
 
-    def generate_training_dataset_from_filepath(self,  filepath: str, max_frames):
+        audio_training_data_generator = AudioTrainingDataGenerator(base_frequency=self.base_frequency,
+                                                                   input_feature_extractors=input_feature_extractors,
+                                                                   output_feature_extractors=output_feature_extractors)
+        dataset = audio_training_data_generator.training_data_from_audio_file(filepath)
+
+        random_dataset_reducer = RandomTrainingDatasetReducer(ReproRNG(100))
+        dataset = random_dataset_reducer.reduce_dataset(dataset, max_frames)
+
+        burst_manipulator = RandomAudioBurstDatasetManipulator([[0,21], [21,42], [42,63]])
+        dataset = burst_manipulator.manipulate_dataset(dataset)
+
+        negative_version_manipulator = SymmetricVersionDatasetManipulator(input_indices=[[0, len(self.delay.delays)]], output_indices=[[0,1]])
+        dataset = negative_version_manipulator.manipulate_dataset(dataset)
+
+
+
+        return dataset
+
+    def xxxgenerate_training_dataset_from_filepath(self,  filepath: str, max_frames):
         # WAV-Datei laden
         signal, samplerate = sf.read(filepath, dtype='float32')
         if signal.ndim == 2:
@@ -156,7 +174,7 @@ class TrainingDataGenerator:
         decay_inertia = pow(0.5,1/period_delay_in_samples)
         self.delay.prepare()
         self.delay.process_mono_split(init_samples)  # output can be ignored
-        remaining_signal = signal[max_delay_samples:]
+        remaining_signal = signal[(max_delay_samples + num_lookahead_samples):]
         average_decay = None
         decay_meter = None
 
@@ -190,6 +208,7 @@ class TrainingDataGenerator:
         for frame in main_gen:
 
             delay_output = self.delay.process_mono_split(frame)
+
             if self.training_parameters.use_energy_and_decay:
                 decay_output = decay_meter.process_mono(frame)
                 # Map roughly +-0.04 scale to -1...1, with average at 0.
@@ -198,13 +217,15 @@ class TrainingDataGenerator:
                 decay_parameter = decay_inertia*decay_parameter + (1-decay_inertia)*new_decay_parameter
                 # apply minmax clipping only on actual training parameter, not before applying inertia.
                 decay_row = np.array([[min(max(decay_parameter,-1),1)]])
+                decay_target = np.array([[new_decay_parameter]])
             else:
                 decay_row = None
+                decay_target = None
             if skip_probability and rng.bernoulli(skip_probability):
                 # Reduce Training data so that we can also use the tail of the file without slowing down training too much
                 continue
 
-            delay_row = delay_output.T  # Transpose because trainingdata expects rows instead of columns
+            delay_row = delay_output.T  # Transpose because trainingdata expects rows instead of columns (Trainingdata: 1 row = 1 Trainingset, 1 colum = 1 Feature)
             concatenate_rows = [delay_row, controls_row]
             if decay_row:
                 concatenate_rows.append(decay_row)

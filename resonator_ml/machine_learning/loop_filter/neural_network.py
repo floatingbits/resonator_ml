@@ -22,20 +22,27 @@ class NeuralNetworkModule(nn.Module):
         super().__init__()
 
         self.in_dim = window_size + control_dim
-        self.net = nn.Sequential(
+        self.common_net = nn.Sequential(
             nn.Linear(self.in_dim, hidden),
         )
         for n in range(n_hidden_layers):
-            self.net.append(activation)
+            self.common_net.append(activation)
             if n < n_hidden_layers - 1:
-                self.net.append(nn.Linear(hidden, hidden))
+                self.common_net.append(nn.Linear(hidden, hidden))
 
-        self.net.append(nn.Linear(hidden, 1))
+
+        self.audio_head = nn.Linear(hidden, 1)
+        self.decay_head = nn.Linear(hidden, 1)
         # TODO this is only used as a storage for logging parameters. Define properly in config!
         self.hidden = hidden
 
     def forward(self, inputs):
-        return self.net(inputs)
+        return self.forward_audio_only(inputs)
+    def forward_audio_only(self, inputs):
+        return self.audio_head(self.common_net(inputs))
+    def forward_with_decay(self, inputs):
+        common_out = self.common_net(inputs)
+        return self.audio_head(common_out), self.decay_head(common_out)
 
 
 @dataclass
@@ -125,7 +132,7 @@ class NeuralNetworkResonator(MonoProcessor):
             delay_out = self.delay.pull_multi_channel(1) # sample by sample as long as we do not have a smarter implementation
             concatenation_array = [delay_out.T[0], control_inputs]
             if self.use_decay_feature:
-                concatenation_array.append(np.array([-0.7]))
+                concatenation_array.append(np.array([0]))
             inputs = np.concatenate(concatenation_array, axis=0)
 
             out[i] = self.model.forward(torch.tensor(inputs, dtype=torch.float32))[0] # use the first output
@@ -142,7 +149,7 @@ class NNResonatorInitializer:
 
         # for initialization, we need to feed at least so many samples into the multi-tap delay that the longest
         # of delays is completely full and outputs the first sample
-        max_delay_samples = 550
+        max_delay_samples = 2*550
         init_samples = signal[:max_delay_samples]
         resonator.delay.prepare()
         resonator.delay.process_mono_split(init_samples)  # output can be ignored
@@ -180,6 +187,16 @@ class NeuralNetworkResonatorFactory:
     def create_neural_network_controls(self, parameters: NeuralNetworkParameters):
         return DummyControlInputProvider()
 
+def forward_sequence(model, x_seq):
+    """
+    x_seq: [B, K, D]
+    """
+    B, K, D = x_seq.shape
+    x_flat = x_seq.reshape(B * K, D)
+    y_hat_flat = model(x_flat)        # [B*K]
+    y_hat_seq = y_hat_flat.reshape(B, K,1)
+    return y_hat_seq
+
 
 class Trainer:
     def __init__(self, training_parameters: TrainingParameters, model_path: str):
@@ -196,6 +213,7 @@ class Trainer:
         torch.set_printoptions(sci_mode=True)
         dataset_len = len(dataloader.dataset)
         tracker = PerSampleLossTracker()
+        decay_weight = 0.05 # lambda
         for epoch in range(self.training_parameters.epochs):
             epoch_loss = 0.0
             max_batch_loss = 0.0
@@ -203,8 +221,16 @@ class Trainer:
             for x_input, y_target, ids in dataloader:
                 x_input = x_input.to(device)
                 y_target = y_target.to(device)
+                if x_input.ndim == 3:
+                    y_pred = forward_sequence(model, x_input)
+                else:
+                    y_pred = model(x_input)
 
-                y_pred = model(x_input)
+                # audio_pred, decay_pred = model(x_input)
+                # loss_audio = self.training_parameters.loss_function(audio_pred, audio_target, x_input).mean(dim=1)
+                # loss_decay = self.training_parameters.decay_loss_function(decay_pred, decay_target)
+                # per_sample_loss = loss_audio + decay_weight * loss_decay
+                # loss = per_sample_loss.mean()
 
                 per_sample_loss = self.training_parameters.loss_function(y_pred, y_target, x_input).mean(dim=1)
                 loss = per_sample_loss.mean()

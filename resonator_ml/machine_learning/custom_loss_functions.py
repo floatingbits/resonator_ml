@@ -18,13 +18,16 @@ def relative_mse(pred, target, eps=1e-8):
 # ----------------------------
 def relative_l1(pred, target, x_input, eps=1e-2):
     denom = energy(x_input) + eps
-    return  (pred - target).abs() / denom
+    denom = denom.reshape(denom.shape + (1,))
+    abs = (pred - target).abs()
+    return   abs / denom
 
 def relative_l1_with_penalty(pred, target, x_input):
     return magnitude_penalty_loss(pred, target, x_input, relative_l1, alpha=1)
 
 def energy(x_input):
-    return torch.sqrt((x_input**2).mean(dim=-1))
+    samples = x_input[:,:-2] if x_input.ndim == 2 else x_input[:,:,:-2]
+    return torch.sqrt((samples**2).mean(dim=-1))
 
 def magnitude_penalty_loss(y_pred, y_true, x_input, base_loss_fn, alpha=1.0, eps=1e-2):
     """
@@ -46,12 +49,19 @@ def magnitude_penalty_loss(y_pred, y_true, x_input, base_loss_fn, alpha=1.0, eps
     # excess = max(0, |pred| - |true|)
 
     denom = energy(x_input) + eps
-
+    denom = denom.reshape(denom.shape + (1,))
     penalty = alpha * excess / denom
 
     # Gesamt-Loss
     return base_loss + penalty
 
+def autocorr(seq, lag):
+    return torch.mean(seq[:, :-lag] * seq[:, lag:], dim=1)
+
+def osc_penalty(kernel_length, y_hat_seq):
+    lag = kernel_length
+    osc = autocorr(y_hat_seq, kernel_length)
+    return torch.mean(osc**2)
 # ----------------------------
 # 3) Log-amplitude MSE (dB-ähnlich)
 #    loss = MSE( log(|pred|+eps), log(|target|+eps) )
