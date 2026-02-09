@@ -3,3 +3,4 @@ data/results/decay_only/workspace/*
 data/results/resonator/workspace/*
 data/logs
 data/cache
+/scripts/playground.py
