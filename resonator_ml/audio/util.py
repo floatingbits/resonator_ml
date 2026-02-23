@@ -1,5 +1,3 @@
-from resonator_ml.audio.core import MonoFrame, MultiChannelFrame
-
 import numpy as np
 
 def frame_batch_generator(x:np.ndarray, batch_size:int, drop_last:bool=False):
