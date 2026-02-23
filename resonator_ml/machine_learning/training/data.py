@@ -1,4 +1,5 @@
 import math
+from math import floor
 from typing import Protocol
 
 from sympy.physics.units import length
@@ -34,21 +35,22 @@ class NeuralNetworkDataset(Dataset):
         self.targets = torch.vstack([self.targets, dataset.targets])
 
 
-class SequenceDataset(torch.utils.data.Dataset):
-    def __init__(self, wrapped_dataset: NeuralNetworkDataset, seq_len: int):
+class ImplicitSequenceDataset(torch.utils.data.Dataset):
+    def __init__(self, wrapped_dataset: NeuralNetworkDataset, seq_len: int, hop: int):
         """
         X: [N, D]   (deine bisherigen Inputs)
         y: [N]
         """
         self.wrapped_dataset = wrapped_dataset
         self.K = seq_len
+        self.hop = hop
 
     def __len__(self):
-        return len(self.wrapped_dataset) - self.K + 1
+        return floor((len(self.wrapped_dataset) - self.K + 1) / self.hop)
 
     def __getitem__(self, idx):
-        x_seq = self.wrapped_dataset.inputs[idx : idx + self.K]   # [K, D]
-        y_seq = self.wrapped_dataset.targets[idx : idx + self.K]   # [K, 1]
+        x_seq = self.wrapped_dataset.inputs[idx * self.hop : idx * self.hop + self.K]   # [K, D]
+        y_seq = self.wrapped_dataset.targets[idx * self.hop : idx * self.hop + self.K]   # [K, 1]
         return x_seq, y_seq, idx
 
 @dataclass
@@ -146,6 +148,15 @@ class TrainingDatasetReducer(Protocol):
 class TrainingDatasetManipulator(Protocol):
     def manipulate_dataset(self, dataset: NeuralNetworkDataset) -> NeuralNetworkDataset: ...
 
+class TrainingDatasetSequencer:
+    def sequence_dataset(self, dataset: NeuralNetworkDataset) -> NeuralNetworkDataset:
+        sequenced_dataset = ImplicitSequenceDataset(dataset, 20, 20)
+        inputs = []
+        outputs = []
+        for input, output, idx in sequenced_dataset:
+            inputs.append(input)
+            outputs.append(output)
+        return NeuralNetworkDataset(inputs=torch.vstack(inputs), targets=torch.vstack(outputs))
 
 class SymmetricVersionDatasetManipulator(TrainingDatasetManipulator):
     def __init__(self, input_indices: list[list[int]], output_indices: list[list[int]]):
@@ -169,11 +180,11 @@ class SymmetricVersionDatasetManipulator(TrainingDatasetManipulator):
             new_outputs.append(outputs)
 
         new_dataset = NeuralNetworkDataset(torch.vstack(new_inputs), torch.vstack(new_outputs))
-        dataset.add(new_dataset)
-        return dataset
+
+        return new_dataset
 
 class RandomAudioBurstDatasetManipulator(TrainingDatasetManipulator):
-    def  __init__(self, indices: list[list[int]], manipulation_rate: float = 0.3, max_burst_size_ratio: float = 0.2, min_burst_size_ratio: float = 0.03, append: bool = True):
+    def  __init__(self, indices: list[list[int]], manipulation_rate: float = 0.15, max_burst_size_ratio: float = 0.15, min_burst_size_ratio: float = 0.05, append: bool = True):
         self.manipulation_rate = manipulation_rate
         self.indices = indices # [[0,21]]
         self.max_burst_size_ratio = max_burst_size_ratio
@@ -218,7 +229,8 @@ class RandomAudioBurstDatasetManipulator(TrainingDatasetManipulator):
             if value < snippet_min:
                 snippet_min = value
         burst_size = ratio * (snippet_max - snippet_min) / 2
-        increment = 2 * math.pi / snippet_length
+        # Random burst lentgth
+        increment = (np.random.random_sample() * 2 + 1) * 2 * math.pi / snippet_length
         phase = np.random.random_sample() * 2 * math.pi
         burst = []
         for index in range(index_config[0], index_config[1]):

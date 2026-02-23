@@ -1,19 +1,21 @@
-import numpy as np
-import soundfile as sf
+from typing import Callable
+
 import torch
 import glob
 from pathlib import Path
 
-from dataclasses import dataclass
-
+from dataclasses import dataclass, field
+import json
 from torch.utils.data import DataLoader
+from hashlib import sha256
 
+from app.config.app import Config
 from resonator_ml.audio.metering import DecayMeter
-from resonator_ml.audio.util import frame_batch_generator
+from resonator_ml.machine_learning.loop_filter.neural_network import DelayPattern
 from resonator_ml.machine_learning.training.data import NeuralNetworkDataset, AudioTrainingDataGenerator, \
     AudioMonoSplitFeatureExtractor, ConstantControlValueFeatureProvider, AudioDecayMeterFeatureExtractor, \
     SimpleAudioFeatureExtractor, RandomTrainingDatasetReducer, RandomAudioBurstDatasetManipulator, \
-    SymmetricVersionDatasetManipulator, SequenceDataset
+    SymmetricVersionDatasetManipulator, TrainingDatasetSequencer
 from resonator_ml.machine_learning.training.parameters import TrainingParameters
 from resonator_ml.utility.random import ReproRNG
 
@@ -22,7 +24,7 @@ TRAINING_DATA_SUB_PATH_DECAY = "decay_only"
 
 
 def prepare_dataloader(dataset, batch_size=512):
-    sequence_dataset = SequenceDataset(wrapped_dataset=dataset, seq_len=20)
+
     return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 @dataclass
@@ -53,36 +55,72 @@ class FilepathGenerator:
                 .format(base_path=self.base_path,mode=self.mode,instrument=self.instrument,
                         fret_no=fret_no, exciter_type=exciter_type, extension=self.extension))
 
+@dataclass()
+class CacheKeyRequest:
+    delay_patterns: list[DelayPattern] = field(default_factory=lambda : [])
+    max_training_data_frames: int = 0
+    use_decay_feature: bool = False
+    instrument_name: str = ""
+    sub_cache_id: str = "" # can be filename or {filename}_processed or "all" or just blank ""
+
+class TrainingDataCacheKeyProvider:
+    def __init__(self, config: Config, cache_key_generator: 'TrainingDataCacheKeyGenerator'):
+        self.config = config
+        self.cache_key_generator = cache_key_generator
+
+    def provide_cache_key_for_sub_id(self, sub_id: str = "") -> str:
+        request = CacheKeyRequest(
+            delay_patterns=self.config.neural_network_parameters.delay_patterns,
+            max_training_data_frames=self.config.training_parameters.max_training_data_frames,
+            use_decay_feature=self.config.training_parameters.use_energy_and_decay,
+            instrument_name=self.config.instrument_name,
+            sub_cache_id=sub_id
+        )
+        return self.cache_key_generator.training_data_cache_key(request)
+class TrainingDataCacheKeyGenerator:
+    def training_data_cache_key(self, request: CacheKeyRequest) -> str:
+        serialized_patters = ""
+        for pattern in request.delay_patterns:
+            serialized_patters = "+" + serialized_patters + str(pattern.n_before) + "_" + str(pattern.n_after) + "_" + str(pattern.t_factor)+ "-"
+        cache_key_object = [
+            request.max_training_data_frames,
+            request.use_decay_feature,
+            serialized_patters,
+            request.instrument_name,
+            request.sub_cache_id
+        ]
+        return '{instrument}_{sub_id}_{hash}.tdata'.format(
+                    instrument=request.instrument_name, sub_id= request.sub_cache_id[:7], hash=sha256(json.dumps(cache_key_object, sort_keys=True).encode("utf-8")).hexdigest())
+
 
 class TrainingDatasetCache:
-    def __init__(self, path: str):
+    def __init__(self, path: str, cache_key_provider: TrainingDataCacheKeyProvider):
         self.path = path
+        self.cache_key_provider = cache_key_provider
 
-    def save_dataset(self, dataset: NeuralNetworkDataset):
-        cache_path = Path(self.path)
+    def save_dataset(self, dataset: NeuralNetworkDataset, sub_id: str = ""):
+        cache_key = self.cache_key_provider.provide_cache_key_for_sub_id(sub_id)
+        cache_path = Path(self.path) / cache_key
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
                 "inputs": dataset.inputs,
                 "targets": dataset.targets,
             },
-            self.path
+            cache_path
         )
 
-    def load_dataset(self) -> NeuralNetworkDataset | None:
-        cache_path = Path(self.path)
+    def load_dataset(self, sub_id: str = "") -> NeuralNetworkDataset | None:
+        cache_key = self.cache_key_provider.provide_cache_key_for_sub_id(sub_id)
+        cache_path = Path(self.path) / cache_key
         if not cache_path.exists():
             return None
-        data = torch.load(self.path, map_location="cpu")
+        data = torch.load(cache_path, map_location="cpu")
         return NeuralNetworkDataset(
             inputs=data["inputs"],
             targets=data["targets"],
         )
 
-
-def make_lookahead_signal(x: np.ndarray, lookahead: int):
-    pad = np.zeros((lookahead, *x.shape[1:]), dtype=x.dtype)
-    return np.concatenate([x[lookahead:], pad], axis=0)
 
 
 class TrainingDataGenerator:
@@ -96,16 +134,17 @@ class TrainingDataGenerator:
         self.training_dataset_cache = training_dataset_cache
         self.base_frequency = base_frequency
 
-    def get_or_create_dataset(self) -> NeuralNetworkDataset:
-        dataset = self.training_dataset_cache.load_dataset()
+    def get_or_create_dataset(self, factory: Callable[[], NeuralNetworkDataset], sub_id: str = "") -> NeuralNetworkDataset:
+        dataset = self.training_dataset_cache.load_dataset(sub_id)
         if dataset:
             print("Loading dataset from cache")
             return dataset
 
         print("Generating dataset")
-        dataset = self.generate_training_dataset()  # teuer
-        self.training_dataset_cache.save_dataset(dataset)
+        dataset = factory() # teuer
+        self.training_dataset_cache.save_dataset(dataset, sub_id)
         return dataset
+
     def generate_training_dataset(self):
 
 
@@ -114,7 +153,9 @@ class TrainingDataGenerator:
         max_frames = int (self.training_parameters.max_training_data_frames / len(file_paths))
         accumulated_training_data = None
         for file_path in file_paths:
-            training_data = self.generate_training_dataset_from_filepath(filepath=file_path, max_frames=max_frames)
+            training_data = self.get_or_create_dataset(
+                lambda: self.generate_training_dataset_from_filepath(filepath=file_path, max_frames=max_frames),
+                sub_id="full_" + file_path)
             if not accumulated_training_data:
                 accumulated_training_data = training_data
             else:
@@ -124,7 +165,7 @@ class TrainingDataGenerator:
 
     def generate_training_dataloader(self):
 
-        dataset = self.get_or_create_dataset()
+        dataset = self.get_or_create_dataset(lambda : self.generate_training_dataset(), "all")
         return prepare_dataloader(dataset, batch_size=self.training_parameters.batch_size)
 
     def generate_training_dataset_from_filepath(self, filepath: str, max_frames: int) -> NeuralNetworkDataset:
@@ -141,116 +182,26 @@ class TrainingDataGenerator:
         audio_training_data_generator = AudioTrainingDataGenerator(base_frequency=self.base_frequency,
                                                                    input_feature_extractors=input_feature_extractors,
                                                                    output_feature_extractors=output_feature_extractors)
-        dataset = audio_training_data_generator.training_data_from_audio_file(filepath)
+
+        dataset = self.get_or_create_dataset(lambda : audio_training_data_generator.training_data_from_audio_file(filepath),
+                                             sub_id="partial_" + filepath)
+
+        # burst_manipulator = RandomAudioBurstDatasetManipulator([[0,21], [21,42], [42,63], [42,84]])
+        # dataset = burst_manipulator.manipulate_dataset(dataset)
+
+        negative_version_manipulator = SymmetricVersionDatasetManipulator(input_indices=[[0, len(self.delay.delay_times)]],
+                                                                          output_indices=[[0, 1]])
+        negative_dataset = negative_version_manipulator.manipulate_dataset(dataset)
+        sequencer = TrainingDatasetSequencer()
+        sequenced_dataset = sequencer.sequence_dataset(dataset)
+        negative_sequenced_dataset = sequencer.sequence_dataset(negative_dataset)
+
+        sequenced_dataset.add(negative_sequenced_dataset)
 
         random_dataset_reducer = RandomTrainingDatasetReducer(ReproRNG(100))
-        dataset = random_dataset_reducer.reduce_dataset(dataset, max_frames)
-
-        burst_manipulator = RandomAudioBurstDatasetManipulator([[0,21], [21,42], [42,63]])
-        dataset = burst_manipulator.manipulate_dataset(dataset)
-
-        negative_version_manipulator = SymmetricVersionDatasetManipulator(input_indices=[[0, len(self.delay.delays)]], output_indices=[[0,1]])
-        dataset = negative_version_manipulator.manipulate_dataset(dataset)
-
-
+        dataset = random_dataset_reducer.reduce_dataset(sequenced_dataset, max_frames)
 
         return dataset
-
-    def xxxgenerate_training_dataset_from_filepath(self,  filepath: str, max_frames):
-        # WAV-Datei laden
-        signal, samplerate = sf.read(filepath, dtype='float32')
-        if signal.ndim == 2:
-            signal = signal[:, 0]
-
-
-
-        # for initialization, we need to feed at least so many samples into the multi-tap delay that the longest
-        # of delays is completely full and outputs the first sample
-        period_delay_in_samples = 550 # TODO: proper length of delay
-        max_delay_samples = period_delay_in_samples
-        num_lookahead_samples = period_delay_in_samples
-        window_size = period_delay_in_samples
-        init_samples = signal[:(max_delay_samples + num_lookahead_samples)]
-        decay_inertia = pow(0.5,1/period_delay_in_samples)
-        self.delay.prepare()
-        self.delay.process_mono_split(init_samples)  # output can be ignored
-        remaining_signal = signal[(max_delay_samples + num_lookahead_samples):]
-        average_decay = None
-        decay_meter = None
-
-        if self.training_parameters.use_energy_and_decay:
-            # window_size = int(self.training_parameters.energy_window_size_in_s * samplerate)
-            time_in_samples = 5*int(samplerate) # 5 seconds for average decay measuring
-            average_decay_meter = DecayMeter(window_size=window_size, sample_rate=int(samplerate),time_in_samples=time_in_samples)
-            decay_output = average_decay_meter.process_mono(signal[:(time_in_samples + window_size + 1)])
-            # average decay per period in dB
-            average_decay = decay_output[-1]*period_delay_in_samples/time_in_samples
-            decay_meter = DecayMeter(window_size=window_size, sample_rate=int(samplerate),time_in_samples=period_delay_in_samples)
-            num_lookahead_samples = period_delay_in_samples
-            decay_meter.prepare()
-            decay_meter.process_mono(init_samples)
-
-        input_list = []
-        target_list = []
-        # iterate per sample over rest of audio file:
-        # Feed the delay with the signal, the delay's output is the input of the neural network + control signal
-        count = 0
-        controls_input = self.controls.get_control_input_data()
-        controls_row = controls_input.reshape(1, -1)
-
-        skip_probability = 1 - min(1, max_frames/len(remaining_signal))
-        # reproducible random number generator to get reproducible results while randomly reducing training data
-        rng = ReproRNG(100)
-
-        batch_size = 1
-        main_gen = frame_batch_generator(remaining_signal, batch_size)
-        decay_parameter = 0
-        for frame in main_gen:
-
-            delay_output = self.delay.process_mono_split(frame)
-
-            if self.training_parameters.use_energy_and_decay:
-                decay_output = decay_meter.process_mono(frame)
-                # Map roughly +-0.04 scale to -1...1, with average at 0.
-                decay_scale = 0.04
-                new_decay_parameter = float((decay_output[0] - average_decay) / decay_scale)
-                decay_parameter = decay_inertia*decay_parameter + (1-decay_inertia)*new_decay_parameter
-                # apply minmax clipping only on actual training parameter, not before applying inertia.
-                decay_row = np.array([[min(max(decay_parameter,-1),1)]])
-                decay_target = np.array([[new_decay_parameter]])
-            else:
-                decay_row = None
-                decay_target = None
-            if skip_probability and rng.bernoulli(skip_probability):
-                # Reduce Training data so that we can also use the tail of the file without slowing down training too much
-                continue
-
-            delay_row = delay_output.T  # Transpose because trainingdata expects rows instead of columns (Trainingdata: 1 row = 1 Trainingset, 1 colum = 1 Feature)
-            concatenate_rows = [delay_row, controls_row]
-            if decay_row:
-                concatenate_rows.append(decay_row)
-
-            inputs_concatenated = np.concatenate(concatenate_rows, axis=1)
-            target_list.append(frame)
-            input_list.append(inputs_concatenated)
-
-            # force symmetric behaviour by adding symmetric training sample
-            negative_delay_row = delay_row * -1
-            negative_frame = frame * -1
-            concatenate_rows = [negative_delay_row, controls_row]
-            if decay_row:
-                concatenate_rows.append(decay_row)
-            negative_inputs_concatenated = np.concatenate(concatenate_rows, axis=1)
-            target_list.append(negative_frame)
-            input_list.append(negative_inputs_concatenated)
-
-            count += 1
-            if count > max_frames:
-                break
-
-        targets = torch.tensor(np.vstack(target_list), dtype=torch.float32)  # Shape: (N, 1)
-        inputs = torch.tensor(np.vstack(input_list), dtype=torch.float32)
-        return NeuralNetworkDataset(inputs, targets)
 
 
 
