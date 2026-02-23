@@ -7,7 +7,7 @@ import torch.nn as nn
 
 from resonator_ml.audio.core import MonoProcessor, MonoSplitProcessor, Tunable, MonoFrame, MultiChannelFrame, \
     MonoPushProcessor, MultiChannelPullProcessor
-from resonator_ml.audio.delay_lines import SampleAccurateDelayLineMono
+from resonator_ml.audio.delay_lines import SampleAccurateDelayLineMono, SampleAccurateMultiHeadDelay
 
 from dataclasses import dataclass
 
@@ -66,6 +66,16 @@ class PatternDelayFactory:
                 if n_samples > 0 :
                     result_delays.append(SampleAccurateDelayLineMono(n_samples, sample_rate))
         return  result_delays
+    def create_delay_times(self, sample_rate: int, base_time: float):
+        result_delay_times = []
+        for delay_pattern in self.delay_patterns:
+            base_delay_time = delay_pattern.t_factor * base_time
+            base_delay_samples = int(sample_rate * base_delay_time)
+            sample_range = range(base_delay_samples - delay_pattern.n_before, base_delay_samples + delay_pattern.n_after + 1)
+            for n_samples in sample_range:
+                if n_samples > 0 :
+                    result_delay_times.append(n_samples)
+        return  result_delay_times
 
 
 
@@ -76,7 +86,8 @@ class NnResonatorDelay(MonoSplitProcessor, MonoPushProcessor, MultiChannelPullPr
         super().__init__(sample_rate)
         self.base_time = 1000
         self.delay_factory = delay_factory
-        self.delays:list[SampleAccurateDelayLineMono] = []
+        self.delay_times:list[int] = []
+        self.delay = None
         self.create_delays()
 
     def set_base_frequency(self, frequency: float):
@@ -87,23 +98,17 @@ class NnResonatorDelay(MonoSplitProcessor, MonoPushProcessor, MultiChannelPullPr
         return 1/self.base_time
 
     def create_delays(self):
-        self.delays = self.delay_factory.create_delays(self.sample_rate,self.base_time)
+        self.delay_times = self.delay_factory.create_delay_times(self.sample_rate, self.base_time)
+        self.delay = SampleAccurateMultiHeadDelay(self.delay_times, self.sample_rate)
 
     def process_mono_split(self, samples: MonoFrame) -> MultiChannelFrame:
-        return np.vstack([
-            delay.process_mono(samples)
-            for delay in self.delays
-        ])
+        return self.delay.process_mono_split(samples)
 
     def push_mono(self, mono):
-        for delay in self.delays:
-            delay.push_mono(mono)
+        self.delay.push_mono(mono)
 
     def pull_multi_channel(self, buffer_size: int) -> MultiChannelFrame:
-        return np.vstack([
-            delay.pull_mono(buffer_size)
-            for delay in self.delays
-        ])
+        return self.delay.pull_multi_channel(buffer_size)
 
 class ControlInputProvider(abc.ABC):
     @abstractmethod
@@ -124,20 +129,71 @@ class NeuralNetworkResonator(MonoProcessor):
         self.controls = controls
         self.use_decay_feature = use_decay_feature
 
-    def process_mono(self, samples: MonoFrame) -> MonoFrame:
-        # currently input samples are not used...
-        out = np.zeros_like(samples)
-        control_inputs = self.controls.get_control_input_data()
-        for i, sample in enumerate(samples):
-            delay_out = self.delay.pull_multi_channel(1) # sample by sample as long as we do not have a smarter implementation
-            concatenation_array = [delay_out.T[0], control_inputs]
-            if self.use_decay_feature:
-                concatenation_array.append(np.array([0]))
-            inputs = np.concatenate(concatenation_array, axis=0)
+    # def process_mono(self, samples: MonoFrame) -> MonoFrame:
+    #     # currently input samples are not used but for the length of the output...
+    #     out = np.zeros_like(samples)
+    #     control_inputs = self.controls.get_control_input_data()
+    #     for i, sample in enumerate(samples):
+    #         delay_out = self.delay.pull_multi_channel(1) # sample by sample as long as we do not have a smarter implementation
+    #         concatenation_array = [delay_out.T[0], control_inputs]
+    #         if self.use_decay_feature:
+    #             concatenation_array.append(np.array([0]))
+    #         inputs = np.concatenate(concatenation_array, axis=0)
+    #
+    #         out[i] = self.model.forward(torch.tensor(inputs, dtype=torch.float32)).detach()[0] # use the first output
+    #         self.delay.push_mono(np.array([out[i]])) # push a single sample
+    #     return out
 
-            out[i] = self.model.forward(torch.tensor(inputs, dtype=torch.float32))[0] # use the first output
-            self.delay.push_mono(np.array([out[i]])) # push a single sample
-        return out
+    def process_mono(self, samples: MonoFrame) -> MonoFrame:
+        total_len = len(samples)
+        control_inputs = self.controls.get_control_input_data()
+
+        out_chunks = []
+        processed = 0
+
+        while processed < total_len:
+            block_size = min(
+                self.delay.delay.n_samples_in_buffer,
+                min(self.delay.delay_times),
+                total_len - processed,
+            )
+
+            # shape: (n_channels, block_size)
+            delay_out = self.delay.pull_multi_channel(block_size)
+
+            # → (block_size, n_channels)
+            delay_features = delay_out.T
+
+            # Control-Inputs batchen
+            control_block = np.repeat(
+                control_inputs[np.newaxis, :],
+                block_size,
+                axis=0
+            )
+
+            feature_blocks = [delay_features, control_block]
+
+            if self.use_decay_feature:
+                decay_feature = np.zeros((block_size, 1))
+                feature_blocks.append(decay_feature)
+
+            # (block_size, total_feature_dim)
+            inputs = np.concatenate(feature_blocks, axis=1)
+
+            torch_in = torch.tensor(inputs, dtype=torch.float32)
+            torch_out = self.model.forward(torch_in).detach().numpy()
+
+            # mono output → erster Outputkanal
+            out_block = torch_out[:, 0]
+
+            out_chunks.append(out_block)
+
+            # Block push
+            self.delay.push_mono(out_block)
+
+            processed += block_size
+
+        return np.concatenate(out_chunks, axis=0)
 
 class NNResonatorInitializer:
     def initialize(self, resonator: NeuralNetworkResonator, filepath):
@@ -176,7 +232,7 @@ class NeuralNetworkResonatorFactory:
         )
 
     def create_neural_network_module(self, delay, controls, parameters: NeuralNetworkParameters):
-        num_inputs = len(delay.delays)
+        num_inputs = len(delay.delay_times)
         if parameters.use_decay_feature:
             num_inputs += 1
         return NeuralNetworkModule(num_inputs, len(controls.get_control_input_data()), n_hidden_layers=parameters.num_hidden_layers, activation=parameters.activation, hidden=parameters.num_hidden_per_layer)

@@ -9,6 +9,7 @@ MultiChannelFrame = np.ndarray  # shape: (channels, samples)
 
 class BaseProcessor(ABC):
     def __init__(self, sample_rate: int):
+        super().__init__()
         self.sample_rate = sample_rate
         self._prepared = False
 
@@ -21,6 +22,19 @@ class BaseProcessor(ABC):
 
     def reset(self):
         """Reset internal DSP state (delay buffers, filter memory, envelopes...)."""
+class BufferedProcessor(ABC):
+    def __init__(self):
+        super().__init__()
+        self.n_samples_in_buffer = 0
+        self.multi_push = False
+
+    def push_buffer(self, n_samples: int):
+        self.n_samples_in_buffer += n_samples
+
+    def pull_buffer(self, n_samples: int):
+        self.n_samples_in_buffer -= n_samples
+        assert self.n_samples_in_buffer >= 0, "Buffer underrun"
+
 
 class MonoPushProcessor(ABC):
     @abstractmethod

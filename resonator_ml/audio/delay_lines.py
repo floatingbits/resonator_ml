@@ -1,5 +1,6 @@
 import numpy as np
-from .core import MonoProcessor, MonoPushProcessor, MonoPullProcessor, MonoFrame
+from .core import MonoProcessor, MonoPushProcessor, MonoPullProcessor, MonoFrame, MonoSplitProcessor, \
+    MultiChannelPullProcessor, MultiChannelFrame, BufferedProcessor
 from abc import ABC
 
 
@@ -145,3 +146,89 @@ class SampleAccurateDelayLineMono(MonoProcessor, MonoPushProcessor, MonoPullProc
                 self.read_index = 0
         return out
 
+
+class SampleAccurateMultiHeadDelay(MonoSplitProcessor, MonoPushProcessor, MultiChannelPullProcessor, BufferedProcessor):
+
+
+    def __init__(self, delay_times_in_samples: list[int], sample_rate: int, delay_buffer_size: int = 8192):
+        super().__init__(sample_rate)
+        super(BufferedProcessor).__init__()
+        super(MonoSplitProcessor).__init__()
+        super(MonoPushProcessor).__init__()
+        super(MultiChannelPullProcessor).__init__()
+        self.delay_times_in_samples = delay_times_in_samples
+        self.delay_buffer_size = delay_buffer_size
+        self.buffer = np.zeros(self.delay_buffer_size, dtype=np.float32)
+        # enable pull/delayed push with separate write/read indices
+        self.write_index = 0
+        self.read_indices = []
+        self.reset_indices()
+
+    def prepare(self):
+        super().prepare()
+        self.reset_indices()
+
+    def reset_indices(self):
+        self.write_index = 0
+        self.read_indices = [
+            self.delay_buffer_size - cur_delay_time - 1
+            for cur_delay_time in self.delay_times_in_samples
+        ]
+        # consider buffer filled with zeroes initially
+        self.n_samples_in_buffer = min(self.delay_times_in_samples)
+
+    def reset(self):
+        self.buffer[:] = 0
+        self.reset_indices()
+
+    # def process_mono_split(self, mono) -> MonoFrame:
+    #     out = np.zeros_like(mono)
+    #     for i, sample in enumerate(mono):
+    #         for channel,read_index in enumerate(self.read_indices):
+    #             out[channel][i] = self.buffer[read_index]
+    #             self.read_indices[channel] = read_index + 1
+    #             if self.read_indices[channel] == self.max_delay_samples:
+    #                 self.read_indices[channel] = 0
+    #
+    #         self.buffer[self.write_index] = sample
+    #         self.write_index = self.write_index + 1
+    #         if self.write_index == self.max_delay_samples:
+    #             self.write_index = 0
+    #
+    #     return out
+
+    def push_mono(self, mono):
+        self.push_buffer(len(mono))
+        for i, sample in enumerate(mono):
+            self.buffer[self.write_index] = sample
+            self.write_index = self.write_index + 1
+            if self.write_index == self.delay_buffer_size:
+                self.write_index = 0
+
+    def pull_multi_channel(self, buffer_size: int) -> MultiChannelFrame:
+        self.pull_buffer(buffer_size)
+        out = np.zeros((len(self.read_indices), buffer_size), dtype=np.float32)
+        for i in range(buffer_size):
+            for channel, _ in enumerate(self.read_indices):
+                self.read_indices[channel] = self.read_indices[channel] + 1
+                if self.read_indices[channel] == self.delay_buffer_size:
+                    self.read_indices[channel] = 0
+                out[channel][i] = self.buffer[self.read_indices[channel]]
+
+
+        return out
+
+    def process_mono_split(self, samples: MonoFrame) -> MultiChannelFrame:
+        buffer_size = samples.shape[0]
+        cur_pos = 0
+        out = np.zeros((len(self.read_indices),0),dtype=np.float32)
+        while buffer_size:
+            cur_buffer_size = min(buffer_size, self.delay_buffer_size)
+            next_pos = cur_pos + cur_buffer_size
+            cur_samples = samples[cur_pos:next_pos]
+            self.push_mono(cur_samples)
+            cur_output = self.pull_multi_channel(cur_buffer_size)
+            out = np.hstack([out, cur_output])
+            buffer_size -= cur_buffer_size
+            cur_pos = next_pos
+        return out
