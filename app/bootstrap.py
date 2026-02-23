@@ -1,6 +1,7 @@
 from app.config.app import Config
 from app.container import training_parameters, nn_resonator, training_data_generator, out_filepath, \
-    file_storage, training_loss_series_provider, parameters_storage, trainer
+    file_storage, training_loss_series_provider, parameters_storage, trainer, init_sound_file
+from resonator_ml.core.use_cases.plot_spectrum_comparison import PlotSpectrumComparison
 from resonator_ml.core.use_cases.plot_training_data import PlotTrainingData
 from resonator_ml.core.use_cases.plot_training_result import PlotTrainingResult
 from resonator_ml.core.use_cases.plot_weights import PlotWeights
@@ -49,6 +50,11 @@ def build_plot_weights_use_case(config: Config):
 def build_plot_training_data_use_case(config: Config):
 
     return PlotTrainingData(training_data_generator(config))
+
+def build_plot_spectrum_comparison(config: Config):
+    output_file = file_storage(config).sound_output_path().as_posix()
+    init_file = init_sound_file(config)
+    return PlotSpectrumComparison({'Output': output_file, 'init':  init_file})
 
 
 def configure_stdout(config: Config, log_name: str):

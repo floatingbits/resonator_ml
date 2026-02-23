@@ -29,17 +29,15 @@ def parse_set_arguments(set_args: list[str]) -> Dict[str, Any]:
     return overrides
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(command_names: list[str]) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    train = subparsers.add_parser("train")
-    train.add_argument("--config", type=str)
-    train.add_argument("--set", action="append", default=[])
 
-    out = subparsers.add_parser("out")
-    out.add_argument("--config", type=str)
-    out.add_argument("--set", action="append", default=[])
+    for command_name in command_names:
+        subparser = subparsers.add_parser(command_name)
+        subparser.add_argument("--config", type=str)
+        subparser.add_argument("--set", action="append", default=[])
 
     return parser

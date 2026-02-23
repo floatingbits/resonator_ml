@@ -4,7 +4,8 @@ from app.config.app import Config
 from resonator_ml.machine_learning.loop_filter.neural_network import NeuralNetworkResonatorFactory, Trainer, \
     NNResonatorInitializer
 from resonator_ml.machine_learning.loop_filter.training_data import TrainingFileDescriptor, TrainingDataGenerator, \
-    FilepathGenerator, TrainingFileFinder, TrainingDatasetCache
+    FilepathGenerator, TrainingFileFinder, TrainingDatasetCache, TrainingDataCacheKeyProvider, \
+    TrainingDataCacheKeyGenerator
 
 import torch
 
@@ -35,17 +36,20 @@ def nn_resonator(config: Config, load_model_weights: bool, initialize_resonator:
         model.eval()
 
     if initialize_resonator:
-        if config.initialize_sound_file_path:
-            filepath = config.initialize_sound_file_path
-        else:
-            filepaths = training_file_paths(config)
-            filepath = filepaths[0]
-
+        filepath = init_sound_file(config)
         initializer = NNResonatorInitializer()
         initializer.initialize(resonator, filepath)
 
 
     return resonator
+
+def init_sound_file(config: Config):
+    if config.initialize_sound_file_path:
+        filepath = config.initialize_sound_file_path
+    else:
+        filepaths = training_file_paths(config)
+        filepath = filepaths[0]
+    return filepath
 
 
 
@@ -57,7 +61,8 @@ def training_file_descriptor(config: Config):
     return TrainingFileDescriptor(model_name=config.instrument_name, parameter_string='0')
 
 def training_data_cache(config: Config):
-    return TrainingDatasetCache(file_storage(config).training_data_cache_path().absolute().as_posix())
+    return TrainingDatasetCache(file_storage(config).training_data_cache_path().absolute().as_posix(),
+                                cache_key_provider=training_data_cache_key_provider(config))
 
 def training_data_generator(config: Config):
     resonator = nn_resonator(config, load_model_weights=False, initialize_resonator=False)
@@ -66,6 +71,11 @@ def training_data_generator(config: Config):
                                                     delay=resonator.delay, controls=resonator.controls,
                                  training_dataset_cache=training_data_cache(config),
                                  base_frequency=config.base_frequency)
+def training_data_cache_key_generator(config: Config):
+    return TrainingDataCacheKeyGenerator()
+
+def training_data_cache_key_provider(config: Config):
+    return TrainingDataCacheKeyProvider(config,training_data_cache_key_generator(config))
 
 def training_file_paths(config: Config):
     file_descriptor = training_file_descriptor(config)
