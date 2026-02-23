@@ -17,7 +17,7 @@ def relative_mse(pred, target, eps=1e-8):
 #    loss = mean( |pred - target| / (|target| + eps) )
 # ----------------------------
 def relative_l1(pred, target, x_input, eps=1e-2):
-    denom = energy(x_input) + eps
+    denom = input_energy(x_input) + eps
     denom = denom.reshape(denom.shape + (1,))
     abs = (pred - target).abs()
     return   abs / denom
@@ -25,9 +25,14 @@ def relative_l1(pred, target, x_input, eps=1e-2):
 def relative_l1_with_penalty(pred, target, x_input):
     return magnitude_penalty_loss(pred, target, x_input, relative_l1, alpha=1)
 
-def energy(x_input):
-    samples = x_input[:,:-2] if x_input.ndim == 2 else x_input[:,:,:-2]
+def energy(samples):
+
     return torch.sqrt((samples**2).mean(dim=-1))
+
+def input_energy(x_input):
+    # TODO audio input extractor
+    samples = x_input[:,:-2] if x_input.ndim == 2 else x_input[:,:,:-2]
+    return energy(samples)
 
 def magnitude_penalty_loss(y_pred, y_true, x_input, base_loss_fn, alpha=1.0, eps=1e-2):
     """
@@ -48,7 +53,7 @@ def magnitude_penalty_loss(y_pred, y_true, x_input, base_loss_fn, alpha=1.0, eps
     excess = torch.relu(abs_pred - abs_true)
     # excess = max(0, |pred| - |true|)
 
-    denom = energy(x_input) + eps
+    denom = input_energy(x_input) + eps
     denom = denom.reshape(denom.shape + (1,))
     penalty = alpha * excess / denom
 
