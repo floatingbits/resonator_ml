@@ -1,6 +1,7 @@
 # Progress
 <!-- TOC -->
 * [Progress](#progress)
+  * [Goals](#goals)
   * [Initial setup](#initial-setup)
     * [Network, feedback and features](#network-feedback-and-features)
     * [Training data](#training-data)
@@ -46,9 +47,13 @@
   * [Broader Range Training Data](#broader-range-training-data)
     * [Synthetic Training data](#synthetic-training-data)
     * [Discussing the results](#discussing-the-results)
-    * [Playing with parameters of the synthetic training data](#playing-with-parameters-of-the-synthetic-training-data)
   * [Sequence Training](#sequence-training)
+    * [Introduction](#introduction)
+    * [First results](#first-results-1)
+    * [Conclusion](#conclusion)
 <!-- TOC -->
+## Goals
+For a recap of the goals and intentions, have a look at the [main README.md](../README.md)
 ## Initial setup
 ### Network, feedback and features
 The basic idea was to approximate a real string with a refined Karplus-Strong-Algorithm, where the loop filter is 
@@ -483,8 +488,63 @@ are able to find the sweet spot in between and also dedicate ourselves to a trai
 the system what matters to us most. So let's find the levers to get back to the vivid spectrum results and find out if
 sequence training lets us teach better.
 
-### Playing with parameters of the synthetic training data
-TODO
 
 ## Sequence Training
-TODO
+### Introduction
+Introducing sequence training mainly means that we do not train unrelated single samples anymore, but organize the training
+data in sequences of a few dozens of samples that are taken from the source files in a chunk, without altering their order.
+That allows for one main thing: Judging the resulting chunks as a sequence, so that new types of loss can be applied.
+Adding per-sequence-energy-loss and per-sequence-spectral-loss, we now have the possibility to guide the training process into
+a more statistically correct behaviour, rather than insisting on per-sample-correctness. These three loss types can be
+weighted with their respective lambdas.
+### First results
+While we can see that a high energy lambda will give us very stable results, we can witness that this is a recipe for dullness.
+High spectral-loss-lambdas tend to produce more instable results. But these are just tendencies, and with the introduction 
+of even more learning parameters we can see that it becomes more and more difficult to maintain a good overview and 
+reliable results. The latter seems to get a bigger and bigger problem. 
+### Conclusion
+While I could see that the introduction of sequences in training would offer us more possibilities, it showed us even 
+more sides of the complexity of the problem and DeepLearning in general. Not only do we have to deal with an increasing 
+number of training parameters, but it also becomes clear that the results depend on the initial conditions of the network
+and must find a more statistical way to evaluate our results. So the next step in our journey will be a bit more meta and 
+concern our methodology more than our DL and training architecture. We need to introduce well documented and automated
+**experiments** that respect the probabilistic behaviour of the initial conditions as well as the complex relationship 
+between all parameters in the system. 
+
+## Experiments
+### Introduction
+Not only the last section should have made clear, that we deal with a very complex system in which many well intended and
+sophisticated thoughts and ideas did have **some** impact, but no real breakthrough. I became obvious that the way we are 
+using it (often starting from scratch with a freshly initialized network), a very big part of the outcome depends purely
+on chance and progress could only be guessed on a probabilistic basis. We got more and more training parameters and it became
+difficult to document progress and the connected changes that lead to it. Finally, there is one big point previously unmentioned:
+The measure of progress up to this point was very arbitrary and up to my own judgement. Up to some point, that was fine: 
+Telling a stable, realistic decay from an unstable one was obvious, but quantifying the progress when it comes to sound
+details or the statistic evaluation of many files, there needs to be something more precise and objective: Quantifiable Metrics.
+### Introducing metrics
+Other than my training loss values, the metrics I want to introduce should measure the faithfulness of the whole rendered 
+audio file. Energy decay rate and spectral content should still play a role, but sample correctness is of no concern 
+when it comes to the human perception of the similarity of audio events of such a scale. Concretely, I implemented 
+log_stft, spectral_convergence and mel_distance, later combining them roughly to an overall (negative) score by weighting
+them in a way that it matched my own perception.
+### Implementing and defining experiments
+In my application, an experiment is defined by a set of different configurations and a number of times that this very 
+configuration will be run. Typically, the set of configurations will differ in one or two, sometimes three parameters. 
+The number of runs per config ranges somewhere between 3 and 15, depending on what role the probabilistic aspect plays 
+and how sure I need to be that any improvement is not a product of mere chance.  
+An experiment run follows these three steps: Training, rendering the output file and the computation of the metrics. These
+are generated by comparing the initialisation file (the file we took the first samples to initialize the delays' buffers) 
+with the generated output file.
+### Evaluation
+I added a small streamlit app which uses an interactive table that can choose the configuration of interest and moreover
+shows some plots for statistic evaluation.
+### Experiments in practice
+The automation of evaluation and config variation introduced a whole new world of possibilities, comfort and scientific
+accountability. The evaluation app makes documentation and evaluation very easy and decisions can now be based on facts,
+numbers and statistics, rather than gut feel that was produced by a lucky strike. I hope that previous decisions can mostly 
+be backed up by the coming experiments or revised if it comes out, I was mislead.
+
+#### The first experiments in detail
+TBC
+
+

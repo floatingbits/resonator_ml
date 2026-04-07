@@ -2,7 +2,8 @@
 
 ## Goals
 The purpose of this repository is mainly training my machine learning skills. 
-The goal of the code is to train a resonator, that mimicks a real life string in all its details.
+The goal of the code is to train a resonator, that mimicks a real life string in all its details, mainly focusing on
+the audible aspects.
 
 ### Inspiration
 Inspired by a relatively simple algorithm, the Karplus-Strong-Algorithm, I want to see if it is possible to extend the 
@@ -45,6 +46,22 @@ compromising the main idea of letting the network do the work)
 I am aware that Machine Learning does not only consist of neural networks and that even neural networks could have been
 integrated in a lot of other different ways. Maybe I will find the time to setup other architectures for the same goal to 
 find out if the main idea has an advantage over other techniques and more realism can be achieved. 
+
+### Features and milestones
+The first milestone should be a faithful recreation of an unparametrized decay process of a guitar string. That means
+on the one hand that metrics reflecting the human hearing should be used to measure progress, on the other that the 
+definition of completion of the step will rest arbitrary to some degree: Since we are working on a topic with a lot of
+solutions and with a technology that is quite resource hungry, I expect the result to be much better than what can be 
+achieved with linear filtering and the original Karplus-Strong algorithm before moving on. When it will sound satisfactory
+to me is of course highly arbitrary and not recommended in any professional project, where the goals should be transparent
+and measurable at any time. I will make an exception here because my personal motivation is the only cause for this project.
+
+
+Later features should include: 
+- Parametrizing the string (i.e. fretting, damping/palm-muting)
+- Extracting exciter signals
+- Playing melodies and pieces
+
 
 ## Results
 ### The journey is the destination
