@@ -1,6 +1,5 @@
 import abc
 from abc import abstractmethod
-from typing import Callable
 import soundfile as sf
 import torch
 import torch.nn as nn
@@ -12,9 +11,6 @@ from resonator_ml.audio.delay_lines import SampleAccurateDelayLineMono, SampleAc
 from dataclasses import dataclass
 
 import numpy as np
-
-from resonator_ml.machine_learning.training.analysis import PerSampleLossTracker
-from resonator_ml.machine_learning.training.parameters import TrainingParameters
 
 
 class NeuralNetworkModule(nn.Module):
@@ -174,7 +170,7 @@ class NeuralNetworkResonator(MonoProcessor):
             feature_blocks = [delay_features, control_block]
 
             if self.use_decay_feature:
-                decay_feature = np.zeros((block_size, 1))
+                decay_feature = np.full((block_size, 1), 0.5)
                 feature_blocks.append(decay_feature)
 
             # (block_size, total_feature_dim)
@@ -243,86 +239,21 @@ class NeuralNetworkResonatorFactory:
     def create_neural_network_controls(self, parameters: NeuralNetworkParameters):
         return DummyControlInputProvider()
 
+def flatten(seq):
+    """
+        x_seq: [B, K, D]
+    """
+    B, K, D = seq.shape
+    return seq.reshape(B * K, D)
+
+
 def forward_sequence(model, x_seq):
-    """
-    x_seq: [B, K, D]
-    """
     B, K, D = x_seq.shape
-    x_flat = x_seq.reshape(B * K, D)
+    x_flat = flatten(x_seq)
     y_hat_flat = model(x_flat)        # [B*K]
     y_hat_seq = y_hat_flat.reshape(B, K,1)
     return y_hat_seq
 
 
-class Trainer:
-    def __init__(self, training_parameters: TrainingParameters, model_path: str):
-        self.training_parameters = training_parameters
-        self.model_path = model_path
-
-    def train_neural_network(self, model, dataloader, device="cpu",
-                             epoch_callback: Callable[[int, int, float, float, float], None]=None):
-        model = model.to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=self.training_parameters.learning_rate)
-
-        best_training = float("inf")
-
-        torch.set_printoptions(sci_mode=True)
-        dataset_len = len(dataloader.dataset)
-        tracker = PerSampleLossTracker()
-        decay_weight = 0.05 # lambda
-        for epoch in range(self.training_parameters.epochs):
-            epoch_loss = 0.0
-            max_batch_loss = 0.0
-            min_batch_loss = float("inf")
-            for x_input, y_target, ids in dataloader:
-                x_input = x_input.to(device)
-                y_target = y_target.to(device)
-                if x_input.ndim == 3:
-                    y_pred = forward_sequence(model, x_input)
-                else:
-                    y_pred = model(x_input)
-
-                # audio_pred, decay_pred = model(x_input)
-                # loss_audio = self.training_parameters.loss_function(audio_pred, audio_target, x_input).mean(dim=1)
-                # loss_decay = self.training_parameters.decay_loss_function(decay_pred, decay_target)
-                # per_sample_loss = loss_audio + decay_weight * loss_decay
-                # loss = per_sample_loss.mean()
-
-                per_sample_loss = self.training_parameters.loss_function(y_pred, y_target, x_input).mean(dim=1)
-                loss = per_sample_loss.mean()
-
-
-                # Rückwärts
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                batch_loss = loss.item()
-                epoch_loss += batch_loss * len(x_input)
-                if batch_loss > max_batch_loss:
-                    max_batch_loss = batch_loss
-                if batch_loss < min_batch_loss:
-                    min_batch_loss = batch_loss
-
-                # tracker.update(ids, per_sample_loss, y_pred=y_pred)
-
-            # worst_samples = tracker.worst_samples(k=10, by="quantile", q=0.95)
-            # for idx, loss, prediction, max_prediction, min_prediction, last_prediction in worst_samples:
-            #     print(idx, "Loss: ", loss, "Prediction(mean, max, min):", prediction, max_prediction, min_prediction, last_prediction)
-            #     print(dataloader.dataset.__getitem__(idx))
-
-            loss_average = epoch_loss / dataset_len
-            # TODO: Use validation loss
-            if loss_average < best_training:
-                best_training = loss_average
-                torch.save(model.state_dict(), self.model_path)
-            if epoch_callback:
-                epoch_callback(epoch, self.training_parameters.epochs, loss_average, min_batch_loss, max_batch_loss)
-
-        print("Autocorrelation of sample loss between epochs")
-        for sid, _, _ in tracker.persistent_hard_samples(k=10):
-            print(sid, tracker.loss_autocorrelation(sid))
-
-
-        return model
 
 

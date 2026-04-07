@@ -2,7 +2,8 @@ import torch
 import time
 
 from app.config.app import Config
-from resonator_ml.machine_learning.loop_filter.neural_network import Trainer, NeuralNetworkModule
+from resonator_ml.machine_learning.loop_filter.neural_network import NeuralNetworkModule
+from resonator_ml.machine_learning.training.trainer import Trainer, OuterTrainer
 from resonator_ml.machine_learning.loop_filter.training_data import TrainingDataGenerator
 from resonator_ml.ports.file_storage import FileStorage, DictStorage
 import torch.nn as nn
@@ -14,9 +15,9 @@ def print_callback(epoch: int, epochs: int, epoch_loss: float, min_batch_loss: f
 class TrainLoopNetwork:
     # TODO model is only concrete NeuralNetworkModule bc of param logging. Clean up parameter logging, then make model
     # back nn.Module
-    def __init__(self, model: NeuralNetworkModule, training_data_generator: TrainingDataGenerator, file_storage: FileStorage, trainer: Trainer, params_storage: DictStorage, app_config: Config):
+    def __init__(self, model: NeuralNetworkModule,
+                 file_storage: FileStorage, trainer: OuterTrainer, params_storage: DictStorage, app_config: Config):
         self.model = model
-        self.training_data_generator = training_data_generator
         self.file_storage = file_storage
         self.trainer = trainer
         self.params_storage = params_storage
@@ -26,15 +27,14 @@ class TrainLoopNetwork:
 
         start = time.time()
 
-        dataloader = self.training_data_generator.generate_training_dataloader()
         dataloader_time = time.time()
         print("Dataloader time ", dataloader_time - start, "seconds!")
 
         params = {
             'instrument': self.app_config.instrument_name,
-            'batch_size': self.training_data_generator.training_parameters.batch_size,
-            'lr': self.training_data_generator.training_parameters.learning_rate,
-            'max_num_frames': self.training_data_generator.training_parameters.max_training_data_frames,
+            'batch_size': self.app_config.training_parameters.batch_size,
+            'lr': self.app_config.training_parameters.learning_rate,
+            'max_num_frames': self.app_config.training_parameters.max_training_data_frames,
             'num_layers': len(self.model.common_net) + 1,
             'num_hidden': self.model.hidden
         }
@@ -43,7 +43,7 @@ class TrainLoopNetwork:
         if self.file_storage.model_file_path().exists():
             self.model.load_state_dict(torch.load(self.file_storage.model_file_path()))
 
-        model = self.trainer.train_neural_network(self.model, dataloader, epoch_callback=print_callback)
+        model = self.trainer.train_neural_network(self.app_config.training_parameters.epochs)
 
 
         # Save

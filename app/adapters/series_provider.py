@@ -17,7 +17,7 @@ def parse_training_logs_loss(log_text: str) -> List[float]:
             # epoch = int(epoch_part)
 
             # Split nach "Loss: "
-            loss_part = line.split('Loss: ')[1].split('Min_Batch')[0]
+            loss_part = line.split('Loss: ')[1].split('Validation')[0]
             loss = float(loss_part)
 
             results.append( loss)

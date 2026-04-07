@@ -12,14 +12,21 @@ class LocalFileSystemStorage(FileStorage):
     def model_file_path(self) -> Path:
         if self.config.model_file_path:
             return Path(self.config.model_file_path)
-        path = self._output_folder_path() / 'model.pt'
-        return path
+        output_path = self._output_folder_path()
+        if output_path:
+            path = output_path / 'model.pt'
+            return path
+        else:
+            raise FileNotFoundError('No output dir yet, so no model path')
 
     def history_dirs(self) -> list[Path]:
         base_path = self.output_folder_base_path()
+        return self._numeric_dirs_in_path(base_path)
+
+    def _numeric_dirs_in_path(self, path:Path) -> list[Path]:
         numeric_dirs = sorted(
             (
-                p for p in base_path.iterdir()
+                p for p in path.iterdir()
                 if p.is_dir() and p.name.isdigit()
             ),
             key=lambda p: int(p.name)
@@ -41,20 +48,36 @@ class LocalFileSystemStorage(FileStorage):
 
     def _current_path_version(self) -> int|None:
         history_dirs = self.history_dirs()
+        return self._current_path_version_for_dirs(history_dirs)
+
+    def _current_path_version_for_dirs(self, dirs: list[Path]) -> int|None:
         max_number = max(
-            (int(p.name) for p in history_dirs),
+            (int(p.name) for p in dirs),
             default=None
         )
         return max_number
 
-    def output_folder_base_path(self) -> Path:
+    def _instrument_base_path(self) -> Path:
         path = Path('.')
-        path = path / self.config.results_path / self.config.resonator_results_sub_path / self.config.instrument_name
+        path = path / self.config.results_path / self.config.resonator_results_sub_path
+        if self.config.experiment_name:
+            path = path / "experiments" / self.config.experiment_name
+        path = path / self.config.instrument_name
         return path
 
-    def make_new_version_output_dir(self) -> Path:
-        base_path = self.output_folder_base_path()
-        current_version = self._current_path_version()
+
+
+    def output_folder_base_path(self) -> Path:
+        path = self._instrument_base_path()
+        path.mkdir(parents=True, exist_ok=True)
+        if self.config.experiment_name:
+            experiment_run_dirs = self._numeric_dirs_in_path(path)
+            experiment_run_id = self._current_path_version_for_dirs(experiment_run_dirs)
+            experiment_run_id = 1 if experiment_run_id is None else experiment_run_id
+            path = path / str(experiment_run_id)
+        return path
+
+    def _make_new_version_dir(self, base_path, current_version) -> Path:
         if not current_version:
             current_version = 1
         else:
@@ -63,12 +86,26 @@ class LocalFileSystemStorage(FileStorage):
         path.mkdir()
         return path
 
+    def make_new_experiment_run_dir(self) -> Path:
+        base_path = self._instrument_base_path()
+        current_version = self._current_path_version_for_dirs(self._numeric_dirs_in_path(base_path))
+        return self._make_new_version_dir(base_path,current_version)
+
+    def make_new_version_output_dir(self) -> Path:
+        base_path = self.output_folder_base_path()
+        current_version = self._current_path_version()
+        return self._make_new_version_dir(base_path,current_version)
+
     def sound_output_path(self) -> Path:
         path = self._output_folder_path() / 'output.wav'
         return path
 
     def parameters_output_path(self) -> Path:
         path = self._output_folder_path() / 'params.json'
+        return path
+
+    def results_output_path(self) -> Path:
+        path = self._output_folder_path() / 'results.json'
         return path
 
     def training_data_cache_path(self) -> Path:
@@ -81,7 +118,7 @@ class LocalFileSystemStorage(FileStorage):
             base_path=self.config.resonator_training_path,
             model_name=self.config.instrument_name, parameter_string=parameter_string)
         path = Path(folder)
-        return path.glob("*.war")
+        return path.glob("*.wav")
 
 
 

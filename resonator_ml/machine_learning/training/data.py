@@ -46,9 +46,12 @@ class ImplicitSequenceDataset(torch.utils.data.Dataset):
         self.hop = hop
 
     def __len__(self):
-        return floor((len(self.wrapped_dataset) - self.K + 1) / self.hop)
+        dataset_len = len(self.wrapped_dataset)
+        return floor((len(self.wrapped_dataset) - self.K) / self.hop)
 
     def __getitem__(self, idx):
+        if idx >= self.__len__():
+            raise IndexError()
         x_seq = self.wrapped_dataset.inputs[idx * self.hop : idx * self.hop + self.K]   # [K, D]
         y_seq = self.wrapped_dataset.targets[idx * self.hop : idx * self.hop + self.K]   # [K, 1]
         return x_seq, y_seq, idx
@@ -87,6 +90,7 @@ class AudioMonoSplitFeatureExtractor(AudioFeatureExtractor):
 class SimpleAudioFeatureExtractor(AudioFeatureExtractor):
     def extract(self, request: AudioFeatureRequest) -> FeatureResponse:
         output = input_samples(request)
+        features = output.T.reshape(-1, 1)
         return FeatureResponse(features=output.T.reshape(-1,1))
 
 class AudioDecayMeterFeatureExtractor(AudioFeatureExtractor):
@@ -98,6 +102,8 @@ class AudioDecayMeterFeatureExtractor(AudioFeatureExtractor):
         self.decay_meter.process_mono(init_samples(request))
 
         decay_output = self.decay_meter.process_mono(input_samples(request))
+        if len(decay_output) == 0:
+            return FeatureResponse(features=np.ndarray((0,1), dtype=np.float32))
         average_decay = decay_output.mean()
         # Map roughly +-0.04 scale to -1...1, with average at 0.
         decay_scale = 0.04
@@ -123,7 +129,8 @@ class ConstantControlValueFeatureProvider(AudioFeatureExtractor):
 
     def extract(self, request: AudioFeatureRequest) -> FeatureResponse:
         row = np.asarray(self.control_features)[None, :]  # Shape (1, N)
-        num_feature_rows = len(request.mono_signal) - request.init_samples
+        num_feature_rows = max(0,len(request.mono_signal) - request.init_samples)
+
         control_features_expanded = np.repeat(row, num_feature_rows, axis=0)
         # might be replaced by arr = np.broadcast_to(row, (M, len(lst))) -> more memory efficient
         # (but read-only, which should be fine.)
@@ -149,14 +156,15 @@ class TrainingDatasetManipulator(Protocol):
     def manipulate_dataset(self, dataset: NeuralNetworkDataset) -> NeuralNetworkDataset: ...
 
 class TrainingDatasetSequencer:
-    def sequence_dataset(self, dataset: NeuralNetworkDataset) -> NeuralNetworkDataset:
-        sequenced_dataset = ImplicitSequenceDataset(dataset, 20, 20)
+    def sequence_dataset(self, dataset: NeuralNetworkDataset, seq_len: int, hop: int = 0) -> NeuralNetworkDataset:
+
+        sequenced_dataset = ImplicitSequenceDataset(dataset, seq_len, hop if hop else seq_len)
         inputs = []
         outputs = []
         for input, output, idx in sequenced_dataset:
             inputs.append(input)
             outputs.append(output)
-        return NeuralNetworkDataset(inputs=torch.vstack(inputs), targets=torch.vstack(outputs))
+        return NeuralNetworkDataset(inputs=torch.stack(inputs, dim=0), targets=torch.stack(outputs, dim=0))
 
 class SymmetricVersionDatasetManipulator(TrainingDatasetManipulator):
     def __init__(self, input_indices: list[list[int]], output_indices: list[list[int]]):
@@ -261,7 +269,7 @@ class RandomTrainingDatasetReducer(TrainingDatasetReducer):
                 new_outputs.append(outputs)
                 new_inputs.append(inputs)
 
-        return NeuralNetworkDataset(torch.vstack(new_inputs), torch.vstack(new_outputs))
+        return NeuralNetworkDataset(torch.stack(new_inputs, dim=0), torch.stack(new_outputs, dim=0))
 
 
 
@@ -274,11 +282,21 @@ class AudioTrainingDataGenerator:
         self.output_feature_extractors = output_feature_extractors
         pass
 
-    def training_data_from_audio_file(self, file_path):
+    def training_data_from_audio_file(self, file_path, chunk_index:int = 0, total_num_chunks:int=0):
         signal, samplerate = sf.read(file_path, dtype='float32')
         if signal.ndim == 2:
             signal = signal[:, 0]
 
+        if total_num_chunks:
+            chunk_length = len(signal) / total_num_chunks
+            start = round(chunk_length * chunk_index)
+            end = start + min(round(chunk_length), len(signal) - 1)
+            signal = signal[start:end]
+
+        return self.training_data_from_signal_data(signal, samplerate)
+
+
+    def training_data_from_signal_data(self, signal, samplerate):
         num_init_samples = 1100
         request = AudioFeatureRequest(mono_signal=signal, init_samples=num_init_samples,
                                       base_frequency=self.base_frequency, sample_rate=samplerate)
@@ -293,7 +311,7 @@ class AudioTrainingDataGenerator:
         combined_input = combine_feature_responses(input_feature_responses).astype(np.float32)
         combined_output = combine_feature_responses(output_feature_responses).astype(np.float32)
 
-        targets = torch.from_numpy(combined_output) # Shape: (N, 1)
+        targets = torch.from_numpy(combined_output)  # Shape: (N, 1)
         inputs = torch.from_numpy(combined_input)
         return NeuralNetworkDataset(inputs, targets)
 

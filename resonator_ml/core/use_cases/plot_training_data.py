@@ -9,7 +9,7 @@ class PlotTrainingData:
 
     def execute(self):
 
-        dataloader = self.training_data_generator.generate_training_dataloader()
+        dataloader, test_data = self.training_data_generator.generate_training_dataloader()
 
         for inputs, target, ids in dataloader:
             viewer = BatchFeatureViewer(inputs, target)

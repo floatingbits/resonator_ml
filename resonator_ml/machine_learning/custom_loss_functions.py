@@ -16,23 +16,108 @@ def relative_mse(pred, target, eps=1e-8):
 # 2) Relative L1 (per sample) -- robuster gegen Ausreisser
 #    loss = mean( |pred - target| / (|target| + eps) )
 # ----------------------------
-def relative_l1(pred, target, x_input, eps=1e-2):
+def relative_l1(pred, target, x_input, eps=1e-6):
     denom = input_energy(x_input) + eps
     denom = denom.reshape(denom.shape + (1,))
     abs = (pred - target).abs()
     return   abs / denom
 
 def relative_l1_with_penalty(pred, target, x_input):
-    return magnitude_penalty_loss(pred, target, x_input, relative_l1, alpha=1)
+    return magnitude_penalty_loss(pred, target, x_input, relative_l1, alpha=0.01)
 
 def energy(samples):
-
     return torch.sqrt((samples**2).mean(dim=-1))
+
+def correlation_loss(y_hat, y, eps=1e-8):
+    # optional mean-center -> echte Pearson-Korrelation
+    if len(y_hat.shape) == 3 and y_hat.shape[2] == 1:
+        y_hat = torch.reshape(y_hat, (y_hat.shape[0],y_hat.shape[1]))
+    if len(y.shape) == 3 and y.shape[2] == 1:
+        y = torch.reshape(y, (y.shape[0], y.shape[1]))
+    y_hat_centered = y_hat - y_hat.mean(dim=-1, keepdim=True)
+    y_centered = y - y.mean(dim=-1, keepdim=True)
+
+    corr = F.cosine_similarity(
+        y_hat_centered,
+        y_centered,
+        dim=-1,
+        eps=eps
+    )
+
+    return (1.0 - corr).mean()
+
+def sign_symmetry_break_loss(y_hat, y):
+    if len(y_hat.shape) == 3 and y_hat.shape[2] == 1:
+        y_hat = torch.reshape(y_hat, (y_hat.shape[0], y_hat.shape[1]))
+    if len(y.shape) == 3 and y.shape[2] == 1:
+        y = torch.reshape(y, (y.shape[0], y.shape[1]))
+    corr = F.cosine_similarity(y_hat, y, dim=-1)
+    return (1 - corr).mean()
+
+def reshape_to_sequence(y):
+    if len(y.shape) == 3 and y.shape[2] == 1:
+        y = torch.reshape(y, (y.shape[0], y.shape[1]))
+    return y
+
+def dynamic_sign_loss(y_hat, y, threshold=-0.1, eps=1e-8):
+    y_hat = reshape_to_sequence(y_hat)
+    y = reshape_to_sequence(y)
+    corr = F.cosine_similarity(y_hat, y, dim=-1, eps=eps)
+
+    # nur Samples bestrafen, die ins Plateau driften
+    high_threshold = threshold + 0.5*(-1 - threshold) # half way to -1
+    low_threshold = threshold / 3
+    high_penalty_mask = ((corr < high_threshold).float() + 0.5) * 2  # 1 if not in range, 3 if in range
+    small_penalty_mask = (2 - ((threshold < corr) & (corr < low_threshold)).float())/2 # 1 if not in range, 0.5 if in range
+    no_penalty_mask = 1 - ((corr > low_threshold).float()) # 0 if more positive than small threshold, 1 if bigger
+
+    loss = (1.0 - corr) * high_penalty_mask * small_penalty_mask * no_penalty_mask
+    return loss.mean()
+
+def dynamic_sign_loss_soft(y_hat, y, threshold=0.3, sharpness=5.0, eps=1e-5):
+
+    y_hat = reshape_to_sequence(y_hat)
+    y = reshape_to_sequence(y)
+    weight = y.abs().detach() + 1e-3
+    weight = weight / (weight.mean(dim=-1, keepdim=True) + eps)
+
+    corr = F.cosine_similarity(y_hat * weight, y * weight, dim=-1, eps=eps)
+
+    gate = torch.sigmoid((threshold - corr) * sharpness)
+
+    loss = gate * (1.0 - corr)
+    return loss.mean()
+
+def energy_loss(y_hat,y):
+    B, K, D = y_hat.shape
+    energy_hat = energy(y_hat.reshape(B,K*D))
+    energy_y = energy(y.reshape(B,K*D))
+    abs_loss = (energy_hat - energy_y).abs()
+    eps = 0.00001
+    loss = abs_loss / (energy_y + eps)
+    return loss
 
 def input_energy(x_input):
     # TODO audio input extractor
     samples = x_input[:,:-2] if x_input.ndim == 2 else x_input[:,:,:-2]
     return energy(samples)
+
+def spectral_loss(y_hat, y):
+    y_fft_hat = torch.fft.rfft(y_hat, dim=1)
+    y_fft     = torch.fft.rfft(y, dim=1)
+    return torch.mean(
+        (torch.abs(y_fft_hat) - torch.abs(y_fft))**2
+    )
+
+def log_spectral_loss(y_hat, y):
+    y_fft_hat = torch.fft.rfft(y_hat, dim=1)
+    y_fft = torch.fft.rfft(y, dim=1)
+    return torch.mean(
+        (torch.log(torch.abs(y_fft_hat) + 1e-5)
+         - torch.log(torch.abs(y_fft) + 1e-5)) ** 2
+    )
+
+
 
 def magnitude_penalty_loss(y_pred, y_true, x_input, base_loss_fn, alpha=1.0, eps=1e-2):
     """

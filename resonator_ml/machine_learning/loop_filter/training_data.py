@@ -3,10 +3,12 @@ from typing import Callable
 import torch
 import glob
 from pathlib import Path
-
+import soundfile as sf
 from dataclasses import dataclass, field
 import json
-from torch.utils.data import DataLoader
+import os.path
+from sympy.stats import level_spacing_distribution
+from torch.utils.data import DataLoader, random_split
 from hashlib import sha256
 
 from app.config.app import Config
@@ -55,26 +57,40 @@ class FilepathGenerator:
                 .format(base_path=self.base_path,mode=self.mode,instrument=self.instrument,
                         fret_no=fret_no, exciter_type=exciter_type, extension=self.extension))
 
+from enum import Enum, auto
+
+class CacheLevel(Enum):
+    ALL = auto()
+    COMPLETE_FILE = auto()
+    RAW = auto()
+
 @dataclass()
 class CacheKeyRequest:
+    level: CacheLevel
+    seq_len: int
     delay_patterns: list[DelayPattern] = field(default_factory=lambda : [])
     max_training_data_frames: int = 0
     use_decay_feature: bool = False
     instrument_name: str = ""
+    training_data_glob: str = ""
     sub_cache_id: str = "" # can be filename or {filename}_processed or "all" or just blank ""
+
 
 class TrainingDataCacheKeyProvider:
     def __init__(self, config: Config, cache_key_generator: 'TrainingDataCacheKeyGenerator'):
         self.config = config
         self.cache_key_generator = cache_key_generator
 
-    def provide_cache_key_for_sub_id(self, sub_id: str = "") -> str:
+    def provide_cache_key_for_sub_id(self, sub_id: str = "", level: CacheLevel=CacheLevel.ALL) -> str:
         request = CacheKeyRequest(
             delay_patterns=self.config.neural_network_parameters.delay_patterns,
             max_training_data_frames=self.config.training_parameters.max_training_data_frames,
             use_decay_feature=self.config.training_parameters.use_energy_and_decay,
+            seq_len=self.config.training_parameters.seq_length,
             instrument_name=self.config.instrument_name,
-            sub_cache_id=sub_id
+            training_data_glob=self.config.training_parameters.training_data_glob,
+            sub_cache_id=sub_id,
+            level=level
         )
         return self.cache_key_generator.training_data_cache_key(request)
 class TrainingDataCacheKeyGenerator:
@@ -89,8 +105,13 @@ class TrainingDataCacheKeyGenerator:
             request.instrument_name,
             request.sub_cache_id
         ]
+
+        if request.level != CacheLevel.RAW:
+            cache_key_object.append(request.seq_len)
+        if request.level == CacheLevel.ALL:
+            cache_key_object.append(request.training_data_glob)
         return '{instrument}_{sub_id}_{hash}.tdata'.format(
-                    instrument=request.instrument_name, sub_id= request.sub_cache_id[:7], hash=sha256(json.dumps(cache_key_object, sort_keys=True).encode("utf-8")).hexdigest())
+                    instrument=request.instrument_name, sub_id= request.sub_cache_id[:15], hash=sha256(json.dumps(cache_key_object, sort_keys=True).encode("utf-8")).hexdigest())
 
 
 class TrainingDatasetCache:
@@ -98,8 +119,8 @@ class TrainingDatasetCache:
         self.path = path
         self.cache_key_provider = cache_key_provider
 
-    def save_dataset(self, dataset: NeuralNetworkDataset, sub_id: str = ""):
-        cache_key = self.cache_key_provider.provide_cache_key_for_sub_id(sub_id)
+    def save_dataset(self, dataset: NeuralNetworkDataset, sub_id: str = "", level: CacheLevel = CacheLevel.ALL):
+        cache_key = self.cache_key_provider.provide_cache_key_for_sub_id(sub_id, level)
         cache_path = Path(self.path) / cache_key
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
@@ -110,8 +131,8 @@ class TrainingDatasetCache:
             cache_path
         )
 
-    def load_dataset(self, sub_id: str = "") -> NeuralNetworkDataset | None:
-        cache_key = self.cache_key_provider.provide_cache_key_for_sub_id(sub_id)
+    def load_dataset(self, sub_id: str = "", level: CacheLevel=CacheLevel.ALL) -> NeuralNetworkDataset | None:
+        cache_key = self.cache_key_provider.provide_cache_key_for_sub_id(sub_id, level)
         cache_path = Path(self.path) / cache_key
         if not cache_path.exists():
             return None
@@ -126,23 +147,24 @@ class TrainingDatasetCache:
 class TrainingDataGenerator:
     def __init__(self, training_parameters: TrainingParameters, training_file_descriptor: TrainingFileDescriptor,
                  delay, controls, training_dataset_cache: TrainingDatasetCache,
-                 base_frequency: float):
+                 base_frequency: float, validation_data_ratio: float=0.1):
         self.training_parameters = training_parameters
         self.training_file_descriptor = training_file_descriptor
         self.delay = delay
         self.controls = controls
         self.training_dataset_cache = training_dataset_cache
         self.base_frequency = base_frequency
+        self.validation_data_ratio = validation_data_ratio
 
-    def get_or_create_dataset(self, factory: Callable[[], NeuralNetworkDataset], sub_id: str = "") -> NeuralNetworkDataset:
-        dataset = self.training_dataset_cache.load_dataset(sub_id)
+    def get_or_create_dataset(self, factory: Callable[[], NeuralNetworkDataset], sub_id: str = "", level: CacheLevel = CacheLevel.ALL) -> NeuralNetworkDataset:
+        dataset = self.training_dataset_cache.load_dataset(sub_id, level)
         if dataset:
             print("Loading dataset from cache")
             return dataset
 
         print("Generating dataset")
         dataset = factory() # teuer
-        self.training_dataset_cache.save_dataset(dataset, sub_id)
+        self.training_dataset_cache.save_dataset(dataset, sub_id, level)
         return dataset
 
     def generate_training_dataset(self):
@@ -155,7 +177,7 @@ class TrainingDataGenerator:
         for file_path in file_paths:
             training_data = self.get_or_create_dataset(
                 lambda: self.generate_training_dataset_from_filepath(filepath=file_path, max_frames=max_frames),
-                sub_id="full_" + file_path)
+                sub_id="full_" + os.path.basename(file_path), level=CacheLevel.COMPLETE_FILE)
             if not accumulated_training_data:
                 accumulated_training_data = training_data
             else:
@@ -164,16 +186,18 @@ class TrainingDataGenerator:
         return accumulated_training_data
 
     def generate_training_dataloader(self):
-
-        dataset = self.get_or_create_dataset(lambda : self.generate_training_dataset(), "all")
-        return prepare_dataloader(dataset, batch_size=self.training_parameters.batch_size)
+        generator = torch.Generator().manual_seed(42)
+        dataset = self.get_or_create_dataset(lambda : self.generate_training_dataset(), "all", level=CacheLevel.ALL)
+        split_data = random_split(dataset, [1 - self.validation_data_ratio,self.validation_data_ratio], generator=generator)
+        validation_set = split_data[1].dataset
+        return prepare_dataloader(split_data[0], batch_size=self.training_parameters.batch_size), (validation_set.inputs, validation_set.targets, split_data[1].indices )
 
     def generate_training_dataset_from_filepath(self, filepath: str, max_frames: int) -> NeuralNetworkDataset:
         input_feature_extractors = []
         input_feature_extractors.append(AudioMonoSplitFeatureExtractor(audio_processor=self.delay))
         input_feature_extractors.append(ConstantControlValueFeatureProvider([0.0]))
         period_delay_in_samples = window_size = 550
-        sample_rate = 44100
+        samples, sample_rate = sf.read(filepath)
         decay_meter = DecayMeter(window_size=window_size, sample_rate=int(sample_rate),time_in_samples=period_delay_in_samples)
         input_feature_extractors.append(AudioDecayMeterFeatureExtractor(decay_meter=decay_meter))
         output_feature_extractors = []
@@ -183,25 +207,37 @@ class TrainingDataGenerator:
                                                                    input_feature_extractors=input_feature_extractors,
                                                                    output_feature_extractors=output_feature_extractors)
 
-        dataset = self.get_or_create_dataset(lambda : audio_training_data_generator.training_data_from_audio_file(filepath),
-                                             sub_id="partial_" + filepath)
+        result_dataset:NeuralNetworkDataset|None = None
 
-        # burst_manipulator = RandomAudioBurstDatasetManipulator([[0,21], [21,42], [42,63], [42,84]])
-        # dataset = burst_manipulator.manipulate_dataset(dataset)
+        num_chunks = max(1, round(len(samples)/(6*sample_rate)))
+        # since training data derived from whole files can get really big, when many features are involved,
+        # break them down in chunks, sequence them and then REDUCE the sequenced data randomly.
+        for chunk_index in range(num_chunks):
+            dataset = self.get_or_create_dataset(lambda : audio_training_data_generator.training_data_from_audio_file(filepath, chunk_index, num_chunks),
+                                                 sub_id="partial_" + str(chunk_index) + "_" + os.path.basename(filepath), level=CacheLevel.RAW)
+            if len(dataset) == 0:
+                continue
+            # burst_manipulator = RandomAudioBurstDatasetManipulator([[0,21], [21,42], [42,63], [42,84]])
+            # dataset = burst_manipulator.manipulate_dataset(dataset)
 
-        negative_version_manipulator = SymmetricVersionDatasetManipulator(input_indices=[[0, len(self.delay.delay_times)]],
-                                                                          output_indices=[[0, 1]])
-        negative_dataset = negative_version_manipulator.manipulate_dataset(dataset)
-        sequencer = TrainingDatasetSequencer()
-        sequenced_dataset = sequencer.sequence_dataset(dataset)
-        negative_sequenced_dataset = sequencer.sequence_dataset(negative_dataset)
+            # negative_version_manipulator = SymmetricVersionDatasetManipulator(input_indices=[[0, len(self.delay.delay_times)]],
+            #                                                                   output_indices=[[0, 1]])
+            # negative_dataset = negative_version_manipulator.manipulate_dataset(dataset)
 
-        sequenced_dataset.add(negative_sequenced_dataset)
+            sequencer = TrainingDatasetSequencer()
+            sequenced_dataset = sequencer.sequence_dataset(dataset, seq_len=self.training_parameters.seq_length)
 
-        random_dataset_reducer = RandomTrainingDatasetReducer(ReproRNG(100))
-        dataset = random_dataset_reducer.reduce_dataset(sequenced_dataset, max_frames)
+            # negative_sequenced_dataset = sequencer.sequence_dataset(negative_dataset)
+            # sequenced_dataset.add(negative_sequenced_dataset)
 
-        return dataset
+            random_dataset_reducer = RandomTrainingDatasetReducer(ReproRNG(100))
+            dataset = random_dataset_reducer.reduce_dataset(sequenced_dataset, round(max_frames/num_chunks))
+            if result_dataset:
+                result_dataset.add(dataset)
+            else:
+                result_dataset = dataset
+
+        return result_dataset
 
 
 
