@@ -2,6 +2,7 @@ import dataclasses
 from typing import Callable
 from abc import ABC, abstractmethod
 import torch
+import random
 
 from typing import Generic, TypeVar
 
@@ -150,6 +151,24 @@ class Validator:
             y_pred = predictor.predict(self.test_data)
         return self.loss_module.compute_loss(y_pred, self.test_data)
 
+def random_rollout_crop_simple(batch, min_seq_len, max_seq_len=None):
+
+    x, y, index = batch
+
+    B, T, _ = x.shape
+
+    if max_seq_len is None:
+        max_seq_len = T
+
+    rollout_len = random.randint(min_seq_len, max_seq_len)
+
+    start = random.randint(0, T - rollout_len)
+    end = start + rollout_len
+
+    x = x[:, start:end]
+    y = y[:, start:end]
+
+    return (x, y, index), rollout_len
 
 class ComposedTrainingStep(TrainingStep):
     def __init__(self, predictor: Predictor,
@@ -166,7 +185,7 @@ class ComposedTrainingStep(TrainingStep):
     def step(self, batch):
         for h in self.before_forward_hooks:
             h(batch)
-
+        batch, rollout_len = random_rollout_crop_simple(batch, 10)
         y_pred = self.predictor.predict(batch)
 
         for h in self.after_forward_hooks:

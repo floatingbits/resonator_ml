@@ -39,6 +39,7 @@ class ComputeMetrics:
             results_dict['config'] = config
         self.result_storage.save_dict(results_dict)
         print(metric_results)
+        return results_dict
 
     def _prepare_wavs_for_metrics(self,ref,test):
         min_len = min(len(ref), len(test))

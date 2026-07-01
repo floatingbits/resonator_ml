@@ -8,6 +8,7 @@ from resonator_ml.machine_learning.training.parameters import TrainingParameters
 
 @dataclass()
 class Config:
+    src_model_file_path: Optional[str] = None
     model_file_path: Optional[str] = None
     initialize_sound_file_path: Optional[str] = None
     experiment_name: Optional[str] = None
@@ -23,14 +24,16 @@ class Config:
     base_frequency: float = 82.97
     output_soundfile_length: float = 10
     reuse_last_model_file: bool = False
-    training_parameters: TrainingParameters = field(default_factory=lambda : TrainingParameters(seq_length=150,
+    training_parameters: TrainingParameters = field(default_factory=lambda : TrainingParameters(seq_length=180,
                                         batch_size=128, epochs=60, learning_rate=6.5e-6, energy_lambda=3, spectral_lambda=0.4,
                                         phase_lambda=1,correlation_lambda=18, correlation_loss_threshold=-0.2,loss_function=relative_l1_with_penalty, max_training_data_frames=60000,
                                         use_energy_and_decay=True))
     neural_network_parameters: NeuralNetworkParameters = field(default_factory=lambda : NeuralNetworkParameters(
         num_hidden_per_layer=150,
         num_hidden_layers=1,
-        delay_patterns=[DelayPattern(1,10, 10), DelayPattern(0.75, 10, 10), DelayPattern(0.25, 10, 10), DelayPattern(0.5, 10, 10)],
+       # delay_patterns=[DelayPattern(1,10, 10), DelayPattern(0.75, 10, 10), DelayPattern(0.25, 10, 10), DelayPattern(0.5, 10, 10)],
+        delay_patterns=[DelayPattern(1, 5, 5), DelayPattern(0.75, 5, 5), DelayPattern(0.25, 5, 5),
+                        DelayPattern(0.5, 5, 5)],
         use_decay_feature=True
     ))
 

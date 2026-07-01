@@ -514,7 +514,7 @@ between all parameters in the system.
 ## Experiments
 ### Introduction
 Not only the last section should have made clear, that we deal with a very complex system in which many well intended and
-sophisticated thoughts and ideas did have **some** impact, but no real breakthrough. I became obvious that the way we are 
+sophisticated thoughts and ideas did have **some** impact, but no real breakthrough. It became obvious that the way we are 
 using it (often starting from scratch with a freshly initialized network), a very big part of the outcome depends purely
 on chance and progress could only be guessed on a probabilistic basis. We got more and more training parameters and it became
 difficult to document progress and the connected changes that lead to it. Finally, there is one big point previously unmentioned:
@@ -542,9 +542,57 @@ shows some plots for statistic evaluation.
 The automation of evaluation and config variation introduced a whole new world of possibilities, comfort and scientific
 accountability. The evaluation app makes documentation and evaluation very easy and decisions can now be based on facts,
 numbers and statistics, rather than gut feel that was produced by a lucky strike. I hope that previous decisions can mostly 
-be backed up by the coming experiments or revised if it comes out, I was mislead.
+be backed up by the coming experiments or revised if it comes out that I was misled.
+
+In hindsight the first experiments must be seen with a big grain of salt: Although they seem to be
+reproducible and well documented, their outcome still depends on the random initialization of the network parameters
+since we have strong attractors of far from ideal loss valleys. Thus the first decisions might be almost purely based on chance.
+Before I got rid some of the worst loss plateaus, I tried to tackle the problem with a statistic averaging and the repetition 
+of the experiment multiple times for the same parameter set. This turned out to be a big waste of training time. 
 
 #### The first experiments in detail
-TBC
+##### Very first test
+The very first test was just a parameter sweep of the learning rate. It produced the best results at about 8e-6.
+##### Loss Balance
+I tried to find out an optimal balance of the regularizing loss lambdas and determined it to be energy_lambda=3, 
+spectral_lambda=0.4, phase_lambda=2
+##### Amount of neurons (vs learn rate)
+In the current setup, no real benefit could be found to raise the amount of neurons. In general it looked as if a
+higher amount of neurons required a lower learning rate.
+##### Synthetic training
+At that point in development, no benefit of synthetic training data could be found for delivering better stability.
+This experiment might be repeated with different synthetic data and considering other improvements.
+##### Correlation loss
+Since experiments revealed a clear pattern of randomly converging to a high loss plateau with very similar values, 
+I found out that two of the three loss functions may have a low valley in a 180 degree phase shifted (i.e. negative) solution. 
+To pull the training process away from these high loss plateaus, I introduced a fourth loss, "correlation loss" which punishes 
+a negative correlation of the output with the target. The "correlation loss" experiment was set up to determine the optimal 
+values for its lambda and threshold parameter. 
+##### Sequence length
+The "seq_len" experiment determined an optimal length of about 180 samples.
+##### Further experiments concerning seq_len and loss balance
+Further experiments have been conducted to find out about a possible relationship between seq_len and
+the ratio of the loss lambdas, but no clear results could be found. The results are too heavily depending on random initial 
+conditions and the metrics stagnate while the manual evaluation of the best results are still not convincing. 
+
+#### First experiments results
+While some experiments seemed to deliver clear optimal values, or at least clues, some did either not provide 
+clear results or the optimal values delivered still dissatisfactory experiences in manual evaluation.
+### Conclusion
+Structured and well documented experiments were a big step for this project. Although some of the questions could not be
+answered unambiguously, structural problems could be revealed and tackled, so that further progress can be ensured. 
+Problems found include:
+- High loss plateaus
+- dependence on random initial conditions
+- Results with best metrics are not convincing
+- results are either instable or dull
+
+## Curriculum Training
+To tackle some of the problems revealed by the first batch of experiments, I introduced curriculum training. 
+This should alleviate at least two of the problems mentioned in the last paragraph: While the dependence on the initial
+conditions can be eliminated by starting at a well performing set of parameters, a fine-tuned process, maybe even feedback controlled, 
+could help getting in the area between instable and dull. Spoiler Alert! First attempts to make dull but stable
+models more vivid did only result in instability, but measures will be taken. 
+TBC.
 
 

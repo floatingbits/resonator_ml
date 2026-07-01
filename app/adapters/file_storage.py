@@ -19,6 +19,11 @@ class LocalFileSystemStorage(FileStorage):
         else:
             raise FileNotFoundError('No output dir yet, so no model path')
 
+    def src_model_file_path(self) -> Path:
+        if self.config.src_model_file_path:
+            return Path(self.config.src_model_file_path)
+        return self.model_file_path()
+
     def history_dirs(self) -> list[Path]:
         base_path = self.output_folder_base_path()
         return self._numeric_dirs_in_path(base_path)

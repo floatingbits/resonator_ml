@@ -34,14 +34,17 @@ def build_train_loop_network_use_case(config: Config):
 
 
     # TODO clean up logging + versioning. Doesn't belong here at all...
+    copy_from_old = config.reuse_last_model_file or config.src_model_file_path is not None
     try:
-        old_model_path = storage.model_file_path()
+        old_model_path = storage.src_model_file_path()
     except FileNotFoundError as e:
-        if config.reuse_last_model_file:
+        if copy_from_old:
             raise FileNotFoundError('Cannot reuse last model file because it cannot be found.')
     storage.make_new_version_output_dir()
-    if config.reuse_last_model_file:
+    if copy_from_old:
         shutil.copyfile(old_model_path, storage.model_file_path())
+        # copy also a backup to be able to reuse the last backup
+        shutil.copyfile(old_model_path, storage.model_file_path().parent / (storage.model_file_path().name + '.bak'))
 
     # ATM only initialize after new version output dir is stored
     training_run_context = build_training_run_context(config)

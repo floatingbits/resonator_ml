@@ -156,6 +156,25 @@ def experiment_definition(config:Config):
                 "energy": conf.training_parameters.energy_lambda,
                 "phase": conf.training_parameters.phase_lambda
             })
+        case "seq_len_vs_loss_lambdas_2":
+            for seq_len in [180, 200, 220 ]:
+                for spectral in [0.5, 0.8]:
+                    for phase in [1.5, 1.8]:
+                        for energy in [2.5, 2.8]:
+                            config1 = copy.deepcopy(config)
+                            config1.training_parameters.phase_lambda = phase
+                            config1.training_parameters.spectral_lambda = spectral
+                            config1.training_parameters.energy_lambda = energy
+                            config1.training_parameters.seq_length = seq_len
+                            config1.training_parameters.epochs = 35
+                            configs.append(config1)
+
+            return ExperimentDefinition(8, configs, lambda conf: {
+                "seq_len": conf.training_parameters.seq_length,
+                "spectral": conf.training_parameters.spectral_lambda,
+                "energy": conf.training_parameters.energy_lambda,
+                "phase": conf.training_parameters.phase_lambda
+            })
 
         case _:
             raise ValueError("Experiment name {experiment} not found.".format(experiment=config.experiment_name))
